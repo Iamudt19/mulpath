@@ -35,3 +35,8 @@ Thumbs.db
 # Large font binary files inside bundled animations (tracked via Git LFS or excluded)
 frontend/public/hero-globe/assets/fonts/
 frontend/public/normal-globe/assets/fonts/
+
+# Backend secrets and build output
+backend/.env
+backend/dist/
+backend/uploads/
