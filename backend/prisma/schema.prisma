@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  COLLECTOR
+  AGGREGATOR
+  LAB
+  MANUFACTURER
+  CONSUMER
+}
+
+enum BatchStatus {
+  COLLECTED
+  AGGREGATED
+  TESTING
+  TESTED
+  PROCESSED
+  DISTRIBUTED
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  role          Role           @default(CONSUMER)
+  walletAddress String?        @unique // For blockchain interactions
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  collectedBatches HerbBatch[] @relation("CollectorRelation")
+  labCertificates  TestCertificate[]
+  receivedTransfers PriceTransfer[] @relation("RecipientRelation")
+  sentTransfers     PriceTransfer[] @relation("SenderRelation")
+}
+
+model HerbBatch {
+  id              Int            @id @default(autoincrement())
+  batchId         String         @unique
+  herbName        String
+  quantityKg      Float
+  originLocation  String
+  latitude        Float?
+  longitude       Float?
+  photoUrl        String?
+  notes           String?
+  zoneValidated   Boolean        @default(false)
+  aiConfidence    Float?
+  aiFlagged       Boolean        @default(false)
+  harvestDate     DateTime
+  status          BatchStatus    @default(COLLECTED)
+
+  collectorId     Int
+  collector       User           @relation("CollectorRelation", fields: [collectorId], references: [id])
+
+  certificates    TestCertificate[]
+  priceTransfers  PriceTransfer[]
+  processingEvents ProcessingEvent[]
+
+  // Merging relations (using self-relation implicitly via join table if we use explicit array, but many-to-many is easier)
+  mergedIntoId    Int?
+  mergedInto      HerbBatch?     @relation("BatchMerges", fields: [mergedIntoId], references: [id])
+  sourceBatches   HerbBatch[]    @relation("BatchMerges")
+  
+  formulationId   Int?
+  formulation     Formulation?   @relation(fields: [formulationId], references: [id])
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model ProcessingEvent {
+  id              Int            @id @default(autoincrement())
+  eventType       String         // e.g., DRYING, GRINDING, STORAGE
+  notes           String?
+  
+  batchId         Int
+  batch           HerbBatch      @relation(fields: [batchId], references: [id])
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model Formulation {
+  id                  Int          @id @default(autoincrement())
+  name                String
+  finalPriceInr       Float
+  qrCodeUrl           String?
+  fairTradePercentage Float?
+
+  batches             HerbBatch[]
+
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+}
+
+model ApprovedZone {
+  id              Int            @id @default(autoincrement())
+  species         String
+  geoJsonPolygon  String         // Stored as JSON string
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model PriceTransfer {
+  id              Int            @id @default(autoincrement())
+  amount          Float
+  
+  recipientId     Int
+  recipient       User           @relation("RecipientRelation", fields: [recipientId], references: [id])
+  
+  senderId        Int?
+  sender          User?          @relation("SenderRelation", fields: [senderId], references: [id])
+
+  herbBatchId     Int?
+  herbBatch       HerbBatch?     @relation(fields: [herbBatchId], references: [id])
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model TestCertificate {
+  id              Int            @id @default(autoincrement())
+  certificateHash String         @unique // IPFS hash or document hash
+  testDate        DateTime
+  result          String         // e.g., "PASSED", "FAILED"
+  notes           String?
+  
+  herbBatchId     Int
+  herbBatch       HerbBatch      @relation(fields: [herbBatchId], references: [id])
+  
+  labId           Int
+  lab             User           @relation(fields: [labId], references: [id])
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model BlockchainRecord {
+  id              Int      @id @default(autoincrement())
+  entityType      String   // e.g., "HerbBatch", "Formulation"
+  entityId        Int      
+  txHash          String   
+  contractAddress String
+  timestamp       DateTime @default(now())
+
+  @@index([entityType, entityId])
+}

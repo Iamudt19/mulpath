@@ -1,0 +1,149 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\iamud\\OneDrive\\Desktop\\Mūlpath\\contracts\\contracts\\FormulationRegistry.sol": {
+      "lastModificationDate": 1786709049072,
+      "contentHash": "f11b67fc00fd970627f419a243a2a4ba",
+      "sourceName": "contracts/FormulationRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "FormulationRegistry"
+      ]
+    },
+    "C:\\Users\\iamud\\OneDrive\\Desktop\\Mūlpath\\contracts\\contracts\\GeoFenceValidator.sol": {
+      "lastModificationDate": 1786709047058,
+      "contentHash": "d70bf75d6ab3bf775a794c986de0271b",
+      "sourceName": "contracts/GeoFenceValidator.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "GeoFenceValidator"
+      ]
+    },
+    "C:\\Users\\iamud\\OneDrive\\Desktop\\Mūlpath\\contracts\\contracts\\HarvestRegistry.sol": {
+      "lastModificationDate": 1786709045037,
+      "contentHash": "b014c66f8b0cc5f93b2da9d2c7fdefe3",
+      "sourceName": "contracts/HarvestRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "HarvestRegistry"
+      ]
+    },
+    "C:\\Users\\iamud\\OneDrive\\Desktop\\Mūlpath\\contracts\\contracts\\HerbTraceability.sol": {
+      "lastModificationDate": 1786707835275,
+      "contentHash": "622e75d0412d65d4196d021717c3f6c0",
+      "sourceName": "contracts/HerbTraceability.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "HerbTraceability"
+      ]
+    }
+  }
+}
