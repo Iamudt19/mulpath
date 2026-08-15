@@ -31,3 +31,7 @@ lerna-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Large font binary files inside bundled animations (tracked via Git LFS or excluded)
+frontend/public/hero-globe/assets/fonts/
+frontend/public/normal-globe/assets/fonts/
