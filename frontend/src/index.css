@@ -728,3 +728,157 @@ textarea {
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.05);
   transform: translateY(-1px);
 }
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE & MOBILE LAYOUT SYSTEM
+   ═══════════════════════════════════════════════ */
+.app-root {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: relative;
+}
+
+.bg-animation-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.35;
+  mix-blend-mode: screen;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.bg-animation-layer iframe {
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+  min-width: 0;
+}
+
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  z-index: 40;
+  pointer-events: auto;
+}
+
+.hamburger-btn span {
+  width: 100%;
+  height: 2px;
+  background-color: #f8fafc;
+  border-radius: 2px;
+  transition: all 0.3s linear;
+}
+
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 25;
+}
+
+.role-select {
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.85);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.role-select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+/* Mobile Media Queries (<768px) */
+@media (max-width: 768px) {
+  .hamburger-btn {
+    display: flex;
+  }
+
+  .hidden-mobile {
+    display: none !important;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .app-header {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .app-header-title {
+    font-size: 16px;
+  }
+
+  .main-content {
+    padding: 16px 12px;
+    overflow-y: auto;
+  }
+
+  /* Force grid multi-column elements to single column on mobile */
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4,
+  .md\:grid-cols-2,
+  .md\:grid-cols-3,
+  .md\:grid-cols-4,
+  .lg\:grid-cols-3,
+  .lg\:grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .glass-card-header {
+    padding: 12px 14px;
+  }
+
+  .glass-card-body {
+    padding: 14px;
+  }
+
+  /* Make hero & landing page small divs scroll nicely with background visible */
+  .hero-container,
+  .dashboard-container {
+    gap: 12px !important;
+  }
+}
+

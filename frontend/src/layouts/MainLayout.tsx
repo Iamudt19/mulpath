@@ -25,7 +25,8 @@ export default function MainLayout() {
   const location = useLocation();
   const currentPath = location.pathname;
   const [activeRole, setActiveRole] = useState<Role>('ALL');
-  
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const getPageTitle = () => {
     if (currentPath.startsWith('/verify/')) return 'Chain Verification';
     return pageTitles[currentPath] || 'Dashboard';
@@ -41,49 +42,63 @@ export default function MainLayout() {
     return false;
   });
 
+  const closeMobileMenu = () => setMobileMenuOpen(false);
+
   return (
-    <div className="flex h-screen overflow-hidden relative" style={{ pointerEvents: 'none' }}>
-      {/* 🌐 Interactive Spinning Globe / Particle Background */}
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 0,
-        opacity: 0.28,
-        mixBlendMode: 'screen'
-      }}>
-        <iframe 
-          src={currentPath === '/' ? "/hero-globe/index.html" : "/normal-globe/index.html"} 
+    <div className="app-root" style={{ pointerEvents: 'none' }}>
+
+      {/* 🌐 Interactive Background Animation */}
+      <div className="bg-animation-layer">
+        <iframe
+          src={currentPath === '/' ? '/hero-globe/index.html' : '/normal-globe/index.html'}
           title="Interactive Background Globe"
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            border: 'none', 
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
             pointerEvents: 'auto',
+            touchAction: 'none',
             transform: currentPath === '/' ? 'none' : 'scale(1.35)',
-            transformOrigin: 'center center'
-          }} 
-          scrolling="no" 
+            transformOrigin: 'center center',
+          }}
+          scrolling="no"
         />
       </div>
 
-      {/* Sidebar */}
-      <aside className="sidebar" style={{ zIndex: 10, pointerEvents: 'auto' }}>
+      {/* ── Mobile overlay backdrop ── */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-overlay"
+          onClick={closeMobileMenu}
+          style={{ pointerEvents: 'auto' }}
+        />
+      )}
+
+      {/* ── Sidebar ── */}
+      <aside
+        className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`}
+        style={{ zIndex: 30, pointerEvents: 'auto' }}
+      >
         <div className="sidebar-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '16px 20px' }}>
-          <img src="/logo.jpg" alt="Mūlpath Logo" style={{ width: '100%', maxWidth: '140px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+          <img
+            src="/logo.jpg"
+            alt="Mūlpath Logo"
+            style={{ width: '100%', maxWidth: '140px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+          />
           <span className="sidebar-logo-badge" style={{ marginTop: '2px' }}>BETA</span>
         </div>
-        
+
         <nav className="sidebar-nav">
           {filteredNavItems.map((item) => {
-            const isActive = item.path === '/' 
-              ? currentPath === '/' 
+            const isActive = item.path === '/'
+              ? currentPath === '/'
               : currentPath.startsWith(item.path);
-            
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={`sidebar-link ${isActive ? 'active' : ''}`}
+                onClick={closeMobileMenu}
               >
                 <span className="sidebar-link-icon">{item.icon}</span>
                 <span>{item.label}</span>
@@ -93,46 +108,50 @@ export default function MainLayout() {
         </nav>
 
         <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ 
-            padding: '12px 14px', 
-            background: 'rgba(255, 255, 255, 0.04)', 
-            borderRadius: '12px',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}>
-            <p style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Network
-            </p>
+          <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Network</p>
             <p style={{ fontSize: '13px', color: '#f8fafc', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255,255,255,0.6)' }}></span>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255,255,255,0.6)', flexShrink: 0 }}></span>
               Sepolia Testnet
             </p>
           </div>
         </div>
       </aside>
-      
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden" style={{ zIndex: 10, pointerEvents: 'none' }}>
+
+      {/* ── Main Content ── */}
+      <main className="app-main" style={{ pointerEvents: 'none' }}>
         <header className="app-header" style={{ pointerEvents: 'auto' }}>
+          {/* Hamburger button — mobile only */}
+          <button
+            className="hamburger-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle navigation"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
           <h1 className="app-header-title">{getPageTitle()}</h1>
-          <span className="app-header-breadcrumb">{currentPath === '/' ? 'Home' : currentPath.slice(1).split('/')[0]}</span>
-          
-          {/* Persona / Role Selector */}
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400">View As:</span>
-            <select 
-              value={activeRole} 
+          <span className="app-header-breadcrumb hidden-mobile">{currentPath === '/' ? 'Home' : currentPath.slice(1).split('/')[0]}</span>
+
+          <div className="ml-auto flex items-center gap-2" style={{ pointerEvents: 'auto' }}>
+            <span className="text-xs font-semibold text-slate-400 hidden-mobile">View As:</span>
+            <select
+              value={activeRole}
               onChange={e => setActiveRole(e.target.value as Role)}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer hover:border-slate-300 transition-colors"
+              className="role-select"
             >
-              <option value="ALL">👑 Demo Mode (All Portals)</option>
-              <option value="COLLECTOR">👨🏽‍🌾 Collector / Farmer</option>
+              <option value="ALL">👑 Demo Mode</option>
+              <option value="COLLECTOR">👨🏽‍🌾 Collector</option>
               <option value="AGGREGATOR">🏭 Aggregator</option>
-              <option value="LAB">🧪 Quality Lab</option>
+              <option value="LAB">🧪 Lab</option>
               <option value="MANUFACTURER">💊 Manufacturer</option>
               <option value="CONSUMER">🛡️ Consumer</option>
             </select>
           </div>
         </header>
+
         <div className="main-content">
           <Outlet />
         </div>
