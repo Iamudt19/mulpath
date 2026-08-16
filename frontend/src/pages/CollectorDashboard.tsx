@@ -228,7 +228,9 @@ export const CollectorDashboard: React.FC = () => {
 
   const fetchHarvestHistory = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/harvests/me`);
+      const headers: Record<string, string> = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      const res = await fetch(`${API_BASE}/api/harvests/me`, { headers });
       if (res.ok) {
         const data = await res.json();
         setHarvests(data);
@@ -501,11 +503,11 @@ export const CollectorDashboard: React.FC = () => {
       return;
     }
 
-    // 1. Reset current tx hash and open confirmation modal
+    // 1. Open the confirmation modal immediately (shows animation while Sepolia confirms)
     setCurrentTxHash('');
     setShowBlockchainModal(true);
 
-    // 2. Broadcast transaction to Sepolia via backend relayer
+    // 2. Broadcast real harvest + Sepolia transaction via backend relayer
     try {
       const formData = new FormData();
       formData.append('species', species);
@@ -521,7 +523,9 @@ export const CollectorDashboard: React.FC = () => {
       }
       formData.append('motionFlags', JSON.stringify(motionSummary));
       if (photoFile) formData.append('photo', photoFile);
-      if (authToken) formData.append('authToken', authToken);
+      if (authToken) {
+        formData.append('authToken', authToken);
+      }
 
       const res = await fetch(`${API_BASE}/api/harvests`, {
         method: 'POST',
@@ -530,13 +534,17 @@ export const CollectorDashboard: React.FC = () => {
 
       if (res.ok) {
         const data = await res.json();
+        // 3. Update modal with REAL Sepolia tx hash as soon as it comes back
         if (data.txHash) {
           setCurrentTxHash(data.txHash);
         }
-        fetchHarvestHistory();
+        // 4. Refresh the records dashboard
+        await fetchHarvestHistory();
+      } else {
+        console.error('Harvest API error:', res.status, await res.text());
       }
     } catch (e) {
-      console.warn('Backend harvest logging in progress...');
+      console.warn('Harvest backend call failed:', e);
     }
   };
 
