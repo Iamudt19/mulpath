@@ -120,6 +120,7 @@ export const CollectorDashboard: React.FC = () => {
 
   // Modals & Popups
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
+  const [currentTxHash, setCurrentTxHash] = useState<string>('');
   const [paymentNotice, setPaymentNotice] = useState<{ show: boolean; amount: number; batchId: string; txHash: string } | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [upiId, setUpiId] = useState('farmer.ramesh@okaxis');
@@ -463,13 +464,11 @@ export const CollectorDashboard: React.FC = () => {
       return;
     }
 
-    // Trigger on-chain modal (5-7 seconds simulated confirmation)
+    // 1. Reset current tx hash and open confirmation modal
+    setCurrentTxHash('');
     setShowBlockchainModal(true);
-  };
 
-  const handleBlockchainModalDone = async () => {
-    setShowBlockchainModal(false);
-    // Send actual data to backend
+    // 2. Broadcast transaction to Sepolia via backend relayer
     try {
       const formData = new FormData();
       formData.append('species', species);
@@ -485,45 +484,29 @@ export const CollectorDashboard: React.FC = () => {
       }
       formData.append('motionFlags', JSON.stringify(motionSummary));
       if (photoFile) formData.append('photo', photoFile);
-      // Send JWT token so backend records the real collector
       if (authToken) formData.append('authToken', authToken);
 
       const res = await fetch(`${API_BASE}/api/harvests`, {
         method: 'POST',
         body: formData
       });
+
       if (res.ok) {
         const data = await res.json();
-        // Use real tx hash from blockchain response
         if (data.txHash) {
-          setHarvests(prev => prev.map(h =>
-            h.id === Date.now() ? { ...h, txHash: data.txHash } : h
-          ));
+          setCurrentTxHash(data.txHash);
         }
         fetchHarvestHistory();
       }
     } catch (e) {
-      console.log('Harvest submitted, blockchain write pending.');
+      console.warn('Backend harvest logging in progress...');
     }
+  };
 
-    // Add immediate optimistic harvest card
-    const newEntry: HarvestItem = {
-      id: Date.now(),
-      batchId: `BATCH-${Date.now().toString().slice(-5)}`,
-      herbName: species,
-      quantityKg: parseFloat(quantity) || 45,
-      harvestDate: new Date().toISOString(),
-      status: 'COLLECTED',
-      zoneValidated: isInsideZone,
-      aiConfidence,
-      latitude: parseFloat(latVal) || 0,
-      longitude: parseFloat(lngVal) || 0,
-      sealId,
-      txHash: null // Will be updated with real hash from API response
-    };
-
-    setHarvests(prev => [newEntry, ...prev]);
+  const handleBlockchainModalDone = () => {
+    setShowBlockchainModal(false);
     setCurrentStep('F4_HOME');
+    fetchHarvestHistory();
   };
 
   const triggerRealPaymentCheck = async () => {
@@ -1731,12 +1714,14 @@ export const CollectorDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ⛓️ Real Simulated On-Chain Confirmation Modal */}
+      {/* ⛓️ Live On-Chain Sepolia Confirmation Modal */}
       <BlockchainTxModal
         isOpen={showBlockchainModal}
         title="Logging Harvest Record"
+        txHash={currentTxHash}
+        contractAddress="0xa5c3D7BB4C52Ed17dCF5De132e01141b3cD0295D"
         actionSummary="Registering GPS hash, botanic ViT model proof & NFC seal on Ethereum Sepolia ledger."
-        durationMs={6000}
+        durationMs={5000}
         onClose={handleBlockchainModalDone}
       />
     </div>
