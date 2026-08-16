@@ -16,7 +16,7 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
   isOpen,
   title,
   txHash: initialTxHash,
-  contractAddress = '0x131d2d3edEbbd0090fAd8DA80e2351A0C028236c',
+  contractAddress = '0xa5c3D7BB4C52Ed17dCF5De132e01141b3cD0295D',
   onComplete,
   onClose,
   actionSummary = 'Writing cryptographic record to Ethereum Sepolia...',
@@ -124,10 +124,10 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Transaction Proof:</span>
                 <a
-                  href={`https://sepolia.etherscan.io/address/${contractAddress}`}
+                  href={txHash && txHash.startsWith('0x') && txHash.length > 40 ? `https://sepolia.etherscan.io/tx/${txHash}` : `https://sepolia.etherscan.io/address/${contractAddress}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-400 hover:text-emerald-300 text-[11px] underline flex items-center gap-1"
+                  className="text-emerald-400 hover:text-emerald-300 text-[11px] underline flex items-center gap-1 font-semibold"
                 >
                   View on Sepolia ↗
                 </a>

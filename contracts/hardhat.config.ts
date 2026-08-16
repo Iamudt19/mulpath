@@ -22,7 +22,7 @@ const config: HardhatUserConfig = {
     },
     sepolia: {
       type: "http",
-      url: process.env.SEPOLIA_RPC_URL || process.env.RPC_URL || "https://rpc.sepolia.org",
+      url: process.env.SEPOLIA_RPC_URL || process.env.RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
       accounts: [process.env.PRIVATE_KEY || defaultPrivateKey]
     }
   }
