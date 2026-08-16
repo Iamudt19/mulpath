@@ -52,10 +52,7 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// AUTH ROUTES — Real Phone OTP Login (No Password, No MetaMask)
-// ══════════════════════════════════════════════════════════════
-
-// POST /api/auth/send-otp — Send 6-digit OTP via SMS (Firebase/MSG91)
+// POST /api/auth/send-otp — Generate & store OTP, send via MSG91 if configured
 app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any> => {
   try {
     const { phone } = req.body;
@@ -66,18 +63,29 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await prisma.otpSession.create({
-      data: { phone, otpCode, expiresAt }
-    });
+    // Store OTP in DB
+    try {
+      await prisma.otpSession.create({
+        data: { phone, otpCode, expiresAt }
+      });
+    } catch (dbErr: any) {
+      console.error('[OTP DB ERROR]', dbErr?.message);
+      // DB not ready yet — Render cold start race condition
+      return res.status(503).json({ 
+        error: 'Database initializing. Please wait 30 seconds and try again.',
+        detail: dbErr?.message 
+      });
+    }
 
-    // ── Send via MSG91 / Firebase if key exists ──
+    // Send via MSG91 if configured
     const msg91Key = process.env.MSG91_API_KEY;
     const msg91SenderId = process.env.MSG91_SENDER_ID || 'MULPTH';
     const msg91TemplateId = process.env.MSG91_TEMPLATE_ID;
+    let smsSent = false;
 
     if (msg91Key && msg91TemplateId) {
       try {
-        await fetch(`https://api.msg91.com/api/v5/flow/`, {
+        const smsRes = await fetch(`https://api.msg91.com/api/v5/flow/`, {
           method: 'POST',
           headers: { 'authkey': msg91Key, 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -87,17 +95,25 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
             OTP: otpCode
           })
         });
+        smsSent = smsRes.ok;
+        if (!smsSent) console.warn('MSG91 response:', await smsRes.text());
       } catch (smsErr) {
-        console.warn('SMS gateway error, OTP generated but not sent via SMS:', otpCode);
+        console.warn('SMS gateway error:', smsErr);
       }
-    } else {
-      // Development mode: log OTP to console
-      console.log(`[DEV OTP] Phone: +91${phone} → OTP: ${otpCode}`);
     }
 
-    return res.status(200).json({ success: true, message: `OTP sent to +91${phone}` });
+    // In dev/no-SMS mode: return OTP in response so frontend can show it
+    const devOtp = (!msg91Key || !msg91TemplateId) ? otpCode : undefined;
+    if (devOtp) console.log(`[DEV OTP] +91${phone} → ${otpCode}`);
+
+    return res.status(200).json({ 
+      success: true, 
+      message: smsSent ? `OTP sent to +91${phone}` : `OTP generated for +91${phone}`,
+      ...(devOtp ? { devOtp, notice: 'SMS not configured — OTP shown for development' } : {})
+    });
   } catch (error: any) {
-    return res.status(500).json({ error: 'Failed to send OTP' });
+    console.error('[SEND OTP ERROR]', error);
+    return res.status(500).json({ error: 'Failed to send OTP. ' + error.message });
   }
 });
 
@@ -128,7 +144,6 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response): Promise<an
     let user = await prisma.user.findUnique({ where: { phone } });
     if (!user) {
       const roleEnum = (role === 'COLLECTOR' || role === 'AGGREGATOR' || role === 'LAB' || role === 'MANUFACTURER') ? role : 'COLLECTOR';
-      // Generate a deterministic wallet address placeholder (replace with real AA wallet in prod)
       const walletAddr = `0x${Buffer.from(phone + Date.now().toString()).toString('hex').slice(0, 40)}`;
       user = await prisma.user.create({
         data: {
@@ -164,10 +179,11 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response): Promise<an
       }
     });
   } catch (error: any) {
-    console.error(error);
-    return res.status(500).json({ error: 'Authentication failed.' });
+    console.error('[VERIFY OTP ERROR]', error);
+    return res.status(500).json({ error: 'Authentication failed. ' + error.message });
   }
 });
+
 
 // GET /api/auth/me — Get current user profile from JWT
 app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res: Response): Promise<any> => {

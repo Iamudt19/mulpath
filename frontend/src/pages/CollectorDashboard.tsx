@@ -57,6 +57,7 @@ export const CollectorDashboard: React.FC = () => {
   // Auth State — all empty until real login
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -763,6 +764,7 @@ export const CollectorDashboard: React.FC = () => {
               if (phoneNumber.length !== 10) return;
               setIsSendingOtp(true);
               setOtpError(null);
+              setDevOtp(null);
               try {
                 const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
                   method: 'POST',
@@ -771,6 +773,12 @@ export const CollectorDashboard: React.FC = () => {
                 });
                 const data = await res.json();
                 if (res.ok) {
+                  // Dev mode: backend returns OTP directly (no SMS configured)
+                  if (data.devOtp) {
+                    setDevOtp(data.devOtp);
+                    // Auto-fill OTP boxes
+                    setOtp(data.devOtp.split(''));
+                  }
                   setCurrentStep('F3_OTP');
                 } else {
                   setOtpError(data.error || 'Failed to send OTP. Try again.');
@@ -829,6 +837,15 @@ export const CollectorDashboard: React.FC = () => {
               <span>A unique on-chain smart account will be assigned to +91 {phoneNumber} after verification.</span>
             </div>
           </div>
+
+          {/* Dev Mode OTP Banner */}
+          {devOtp && (
+            <div className="p-3 bg-amber-950/50 border border-amber-500/40 rounded-xl text-center">
+              <p className="text-[11px] text-amber-400 font-semibold">⚠️ Dev Mode — SMS not configured</p>
+              <p className="text-amber-200 font-mono text-2xl font-bold tracking-widest mt-1">{devOtp}</p>
+              <p className="text-[10px] text-amber-500 mt-1">OTP auto-filled ↑ — just click Verify</p>
+            </div>
+          )}
 
           {otpError && (
             <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300">
