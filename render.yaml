@@ -16,3 +16,13 @@ services:
         sync: false
       - key: PORT
         value: 3001
+      - key: SEPOLIA_RPC_URL
+        value: https://ethereum-sepolia-rpc.publicnode.com
+      - key: PRIVATE_KEY
+        sync: false
+      - key: CONTRACT_ADDRESS
+        value: 0xa5c3D7BB4C52Ed17dCF5De132e01141b3cD0295D
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: PLANTNET_API_KEY
+        sync: false
