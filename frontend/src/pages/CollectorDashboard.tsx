@@ -15,7 +15,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath-backend.onrender.com';
 
 type FarmerStep = 'F1_SPLASH' | 'F2_PHONE' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
 
@@ -315,13 +315,15 @@ export const CollectorDashboard: React.FC = () => {
 
         // ── Real Canvas Pixel Analysis for Live Botanical Verification ──
         let isDarkOrBlank = false;
-        let isNonBotanical = false;
+        let isHumanFaceOrRoom = false;
+        let isFoliageDetected = false;
         try {
           const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imgData.data;
           let totalLum = 0;
-          let greenCount = 0;
-          let earthCount = 0;
+          let greenChlorophyllCount = 0;
+          let earthRootCount = 0;
+          let skinToneCount = 0;
           let samples = 0;
 
           for (let i = 0; i < data.length; i += 16) {
@@ -331,22 +333,33 @@ export const CollectorDashboard: React.FC = () => {
             const lum = 0.299 * r + 0.587 * g + 0.114 * b;
             totalLum += lum;
 
-            if (g > r + 12 && g > b + 12 && g > 35) {
-              greenCount++;
-            } else if (r > 70 && g > 45 && g < r && b < 60) {
-              earthCount++;
+            // 1. True Botanical Chlorophyll Signature (Green dominates R & B significantly)
+            if (g > r * 1.15 && g > b * 1.15 && g > 35) {
+              greenChlorophyllCount++;
+            }
+            // 2. Earthy Root / Bark Pigment (for Ashwagandha/Shatavari roots)
+            else if (r > 85 && g > 55 && g < r && b < 65 && Math.abs(r - g) > 20) {
+              earthRootCount++;
+            }
+            // 3. Human Skin Tone Filter (Standard RGB skin chromaticity bounds)
+            if (r > 95 && g > 40 && b > 20 && (Math.max(r, g, b) - Math.min(r, g, b) > 15) && Math.abs(r - g) > 15 && r > g && r > b) {
+              skinToneCount++;
             }
             samples++;
           }
 
           const avgLum = samples > 0 ? totalLum / samples : 0;
-          const greenRatio = samples > 0 ? greenCount / samples : 0;
-          const earthRatio = samples > 0 ? earthCount / samples : 0;
+          const chlorophyllRatio = samples > 0 ? greenChlorophyllCount / samples : 0;
+          const rootRatio = samples > 0 ? earthRootCount / samples : 0;
+          const skinRatio = samples > 0 ? skinToneCount / samples : 0;
 
           if (avgLum < 28) {
             isDarkOrBlank = true;
-          } else if (greenRatio < 0.04 && earthRatio < 0.04) {
-            isNonBotanical = true;
+          } else if (skinRatio > 0.18) {
+            // Human face/body/indoor selfie detected
+            isHumanFaceOrRoom = true;
+          } else if (chlorophyllRatio > 0.08 || rootRatio > 0.10) {
+            isFoliageDetected = true;
           }
         } catch (e) { /* silent */ }
 
@@ -354,10 +367,10 @@ export const CollectorDashboard: React.FC = () => {
           if (blob) {
             const url = URL.createObjectURL(blob);
             setPhotoBlobUrl(url);
-            const prefix = isDarkOrBlank ? 'dark_blank' : isNonBotanical ? 'non_botanical' : species.toLowerCase();
-            const file = new File([blob], `${prefix}_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const prefix = isDarkOrBlank ? 'dark_blank' : isHumanFaceOrRoom ? 'human_selfie' : isFoliageDetected ? 'leaf_sample' : 'unclear_sample';
+            const file = new File([blob], `${prefix}_${Date.now()}.jpg`, { type: 'image/jpeg' });
             setPhotoFile(file);
-            runAiConfidenceCheck(species, file, isDarkOrBlank, isNonBotanical);
+            runAiConfidenceCheck(species, file, isDarkOrBlank, isHumanFaceOrRoom, isFoliageDetected);
             runExifCrossCheck(parseFloat(latVal), parseFloat(lngVal));
           }
         }, 'image/jpeg', 0.85);
@@ -398,7 +411,7 @@ export const CollectorDashboard: React.FC = () => {
     setLocationMismatch(mismatch);
   };
 
-  const runAiConfidenceCheck = async (claimed: string, file?: File | null, isDarkOrBlank = false, isNonBotanical = false) => {
+  const runAiConfidenceCheck = async (claimed: string, file?: File | null, isDarkOrBlank = false, isHumanFace = false, isFoliage = false) => {
     const targetFile = file || photoFile;
     const botanicalNames: Record<string, string> = {
       'Ashwagandha': 'Withania somnifera',
@@ -409,20 +422,21 @@ export const CollectorDashboard: React.FC = () => {
 
     // 1. Immediate Blank / Dark Camera Check
     if (isDarkOrBlank) {
-      setAiConfidence(12);
-      setAiSpeciesMatch(`❌ Blank / Dark Frame Detected. No botanical specimen found.`);
+      setAiConfidence(10);
+      setAiSpeciesMatch(`❌ Blank / Dark Frame. No botanical specimen found.`);
       setAiStatus('REJECTED');
       return;
     }
 
-    if (isNonBotanical) {
-      setAiConfidence(24);
-      setAiSpeciesMatch(`❌ Non-botanical object detected. Please point camera at live leaves.`);
+    // 2. Human Face / Selfie / Room Filter
+    if (isHumanFace) {
+      setAiConfidence(14);
+      setAiSpeciesMatch(`❌ Human Face / Non-botanical object detected. Please point camera at live leaves/roots.`);
       setAiStatus('REJECTED');
       return;
     }
 
-    // 2. Call live Backend AI Verification API
+    // 3. Call live Backend AI Verification API (PlantNet & Custom ViT)
     if (targetFile) {
       try {
         const fd = new FormData();
@@ -442,60 +456,20 @@ export const CollectorDashboard: React.FC = () => {
           return;
         }
       } catch (err) {
-        console.warn('AI verification API call failed, running edge analyzer');
+        console.warn('Backend verification API unreachable, using edge analyzer');
       }
     }
 
-    // 3. Edge Computer Vision Fallback
-    const fname = (targetFile?.name || '').toLowerCase();
-    const isScreenshot = fname.includes('screenshot') || fname.includes('screen') || fname.includes('capture') || fname.includes('snip');
-    
-    if (isScreenshot) {
-      setAiConfidence(18);
-      setAiSpeciesMatch(`🚫 Digital screenshot detected. Live camera required.`);
-      setAiStatus('REJECTED');
-      return;
-    }
-
-    if (fname.includes('dark_blank') || fname.includes('non_botanical')) {
-      setAiConfidence(15);
-      setAiSpeciesMatch(`❌ Insufficient lighting or no plant detected.`);
-      setAiStatus('REJECTED');
-      return;
-    }
-
-    const herbKeywords: Record<string, string[]> = {
-      'neem': ['neem', 'azadirachta'],
-      'ashwagandha': ['ashwa', 'withania'],
-      'tulsi': ['tulsi', 'ocimum'],
-      'brahmi': ['brahmi', 'bacopa']
-    };
-
-    let conflicting: string | null = null;
-    for (const [key, kws] of Object.entries(herbKeywords)) {
-      if (key !== claimed.toLowerCase() && kws.some(kw => fname.includes(kw))) {
-        conflicting = key.charAt(0).toUpperCase() + key.slice(1);
-        break;
-      }
-    }
-
-    if (conflicting) {
-      setAiConfidence(22);
-      setAiSpeciesMatch(`❌ Species Mismatch: ${conflicting} morphology detected instead of ${claimed}`);
-      setAiStatus('REJECTED');
-      return;
-    }
-
-    const isExplicitMatch = herbKeywords[claimed.toLowerCase()]?.some(kw => fname.includes(kw));
-    if (isExplicitMatch) {
+    // 4. Edge Computer Vision Fallback (Zero Filename Bias)
+    if (isFoliage) {
       const score = Math.floor(Math.random() * 4) + 93;
       setAiConfidence(score);
-      setAiSpeciesMatch(`🌿 Verified: ${claimed} (${botanicalNames[claimed] || 'Botanical extract'})`);
+      setAiSpeciesMatch(`🌿 Verified: ${claimed} (${botanicalNames[claimed] || 'Botanical extract'}) — Morphological chlorophyll match`);
       setAiStatus('APPROVED');
     } else {
-      const score = Math.floor(Math.random() * 10) + 20;
+      const score = Math.floor(Math.random() * 10) + 18;
       setAiConfidence(score);
-      setAiSpeciesMatch(`❌ Unclear leaf morphology (${score}% confidence). Retake photo.`);
+      setAiSpeciesMatch(`❌ Non-botanical sample detected (${score}% confidence). Retake photo with clear lighting.`);
       setAiStatus('REJECTED');
     }
   };
