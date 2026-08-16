@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { ReviewQueueModal } from '../components/ReviewQueueModal';
 
 const navItems = [
   { path: '/', label: 'Home', icon: '🏠' },
@@ -26,6 +27,7 @@ export default function MainLayout() {
   const currentPath = location.pathname;
   const [activeRole, setActiveRole] = useState<Role>('ALL');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showReviewQueue, setShowReviewQueue] = useState(false);
 
   const getPageTitle = () => {
     if (currentPath.startsWith('/verify/')) return 'Chain Verification';
@@ -136,6 +138,18 @@ export default function MainLayout() {
           <span className="app-header-breadcrumb hidden-mobile">{currentPath === '/' ? 'Home' : currentPath.slice(1).split('/')[0]}</span>
 
           <div className="ml-auto flex items-center gap-2" style={{ pointerEvents: 'auto' }}>
+            <button
+              onClick={() => setShowReviewQueue(true)}
+              className="bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+              title="Ops Human Review Queue for anti-fraud exceptions"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              <span className="hidden sm:inline">Review Queue</span>
+            </button>
+
             <span className="text-xs font-semibold text-slate-400 hidden-mobile">View As:</span>
             <select
               value={activeRole}
@@ -156,6 +170,12 @@ export default function MainLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Cross-Cutting Ops Review Queue Modal */}
+      <ReviewQueueModal
+        isOpen={showReviewQueue}
+        onClose={() => setShowReviewQueue(false)}
+      />
     </div>
   );
 }

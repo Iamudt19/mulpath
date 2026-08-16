@@ -1,228 +1,753 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import { PaymentModal } from '../components/PaymentModal';
-import L from 'leaflet';
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+import { formatDualCurrency } from '../utils/currency';
+import { BlockchainTxModal } from '../components/BlockchainTxModal';
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
 
-export const AggregatorDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'incoming' | 'process' | 'merge'>('incoming');
-  const [batches, setBatches] = useState<any[]>([]);
-  const [selectedBatch, setSelectedBatch] = useState<any | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [eventType, setEventType] = useState('DRYING');
-  const [eventNotes, setEventNotes] = useState('');
-  const [mergeNotes, setMergeNotes] = useState('');
-  const [paymentBatchId, setPaymentBatchId] = useState<number | undefined>();
-  const [showPayment, setShowPayment] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; success: boolean } | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+interface IncomingBag {
+  id: number;
+  batchId: string;
+  herbName: string;
+  quantityKg: number;
+  collectorName: string;
+  collectorPhone: string;
+  harvestDate: string;
+  latitude: number;
+  longitude: number;
+  sealId: string;
+  isSealIntact: boolean;
+  status: 'PENDING_SCAN' | 'ACCEPTED' | 'REJECTED' | 'FLAGGED';
+  photoUrl?: string;
+  aiConfidence?: number;
+  payoutAmountInr: number;
+}
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface ProcessingLog {
+  dryingTemp: string;
+  dryingHours: string;
+  grindingMachineId: string;
+  date: string;
+}
 
-  useEffect(() => { fetchBatches(); }, []);
+interface LotItem {
+  id: string;
+  name: string;
+  species: string;
+  originalWeightKg: number;
+  processedWeightKg: number;
+  createdAt: string;
+  sourceBagIds: string[];
+  labStatus: 'PENDING' | 'PASSED' | 'FAILED';
+  buyerName?: string;
+  processingHistory: ProcessingLog[];
+}
 
-  const fetchBatches = async () => {
+export const AggregatorDashboard: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'incoming' | 'accepted' | 'processing' | 'merge' | 'lots'>('incoming');
+
+  // Stats bar
+  const [stats] = useState({
+    bagsReceivedToday: 18,
+    pendingPayoutsInr: 22400,
+    activeLotsInProcessing: 3
+  });
+
+  // Mock & Real Bags Data
+  const [bags, setBags] = useState<IncomingBag[]>([
+    {
+      id: 101,
+      batchId: 'BATCH-88219',
+      herbName: 'Ashwagandha',
+      quantityKg: 45,
+      collectorName: 'Ramesh Patel',
+      collectorPhone: '+91 98765-43210',
+      harvestDate: new Date().toISOString(),
+      latitude: 24.465,
+      longitude: 74.869,
+      sealId: 'NFC-88213',
+      isSealIntact: true,
+      status: 'PENDING_SCAN',
+      aiConfidence: 94,
+      payoutAmountInr: 3600
+    },
+    {
+      id: 102,
+      batchId: 'BATCH-88220',
+      herbName: 'Ashwagandha',
+      quantityKg: 30,
+      collectorName: 'Suresh Kumar',
+      collectorPhone: '+91 98765-11223',
+      harvestDate: new Date(Date.now() - 3600000).toISOString(),
+      latitude: 24.472,
+      longitude: 74.881,
+      sealId: 'NFC-88214',
+      isSealIntact: true,
+      status: 'ACCEPTED',
+      aiConfidence: 91,
+      payoutAmountInr: 2400
+    },
+    {
+      id: 103,
+      batchId: 'BATCH-88221',
+      herbName: 'Tulsi',
+      quantityKg: 20,
+      collectorName: 'Pooja Devi',
+      collectorPhone: '+91 98765-99887',
+      harvestDate: new Date(Date.now() - 7200000).toISOString(),
+      latitude: 24.451,
+      longitude: 74.862,
+      sealId: 'NFC-88215',
+      isSealIntact: false,
+      status: 'FLAGGED',
+      aiConfidence: 86,
+      payoutAmountInr: 1600
+    }
+  ]);
+
+  // Scan & Verification Modal (Screen A3)
+  const [scannedBag, setScannedBag] = useState<IncomingBag | null>(null);
+  const [sealStatusOverride, setSealStatusOverride] = useState<boolean>(true);
+  const [brokenSealReason, setBrokenSealReason] = useState<string>('Physically damaged during transit');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentSuccessToast, setPaymentSuccessToast] = useState<string | null>(null);
+
+  // Lot Selection & Merging (Screen A6)
+  const [selectedBagIds, setSelectedBagIds] = useState<number[]>([]);
+  const [lotName, setLotName] = useState(`LOT-ASHWA-${Date.now().toString().slice(-4)}`);
+  const [dryWeightInput, setDryWeightInput] = useState<string>('');
+  const [confirmLotNameInput, setConfirmLotNameInput] = useState<string>('');
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeDiscrepancyWarning, setMergeDiscrepancyWarning] = useState<string | null>(null);
+
+  // Processing Log Panel (Screen A5)
+  const [selectedBatchForProcess, setSelectedBatchForProcess] = useState<IncomingBag | null>(null);
+  const [dryingTemp, setDryingTemp] = useState('42');
+  const [dryingHours, setDryingHours] = useState('18');
+  const [grindingMachineId, setGrindingMachineId] = useState('MILL-HAMMER-04');
+  const [showBlockchainModal, setShowBlockchainModal] = useState(false);
+  const [blockchainActionText, setBlockchainActionText] = useState('');
+
+  // Lots List & Detail (Screen A7)
+  const [lots, setLots] = useState<LotItem[]>([
+    {
+      id: 'LOT-2291',
+      name: 'Ashwagandha Premium Extract Lot #L-2291',
+      species: 'Ashwagandha',
+      originalWeightKg: 75,
+      processedWeightKg: 48,
+      createdAt: '2026-08-14',
+      sourceBagIds: ['BATCH-88219', 'BATCH-88220'],
+      labStatus: 'PASSED',
+      buyerName: 'Dabur AYUSH Formulations Ltd.',
+      processingHistory: [
+        { dryingTemp: '42°C', dryingHours: '18 hrs', grindingMachineId: 'MILL-HAMMER-04', date: '2026-08-14' }
+      ]
+    }
+  ]);
+  const [selectedLotDetail, setSelectedLotDetail] = useState<LotItem | null>(null);
+
+  // Load real validated batches on mount
+  useEffect(() => {
+    fetchValidatedBatches();
+  }, []);
+
+  const fetchValidatedBatches = async () => {
     try {
-      setLoading(true);
-      setError(null);
       const res = await fetch(`${API_BASE}/api/batches/validated`);
       if (res.ok) {
-        setBatches(await res.json());
-      } else {
-        throw new Error('Failed to fetch batches');
+        const data = await res.json();
+        if (data.length > 0) {
+          const mapped: IncomingBag[] = data.map((b: any) => ({
+            id: b.id,
+            batchId: b.batchId,
+            herbName: b.herbName,
+            quantityKg: b.quantityKg,
+            collectorName: b.collector?.name || 'Collector',
+            collectorPhone: '+91 98765-43210',
+            harvestDate: b.harvestDate,
+            latitude: b.latitude || 24.465,
+            longitude: b.longitude || 74.869,
+            sealId: `NFC-${b.id + 88200}`,
+            isSealIntact: true,
+            status: b.status === 'AGGREGATED' ? 'ACCEPTED' : 'PENDING_SCAN',
+            aiConfidence: b.aiConfidence || 92,
+            payoutAmountInr: b.quantityKg * 80
+          }));
+          setBags(mapped);
+        }
       }
     } catch (e) {
-      setError('Could not connect to the server. Please check your connection.');
-    } finally {
-      setLoading(false);
+      console.warn('API fallback for aggregator');
     }
   };
 
-  const handleAddEvent = async (e: React.FormEvent) => {
+  // Screen A3 NFC Scan simulation
+  const handleTriggerNfcScan = () => {
+    const pending = bags.find(b => b.status === 'PENDING_SCAN') || bags[0];
+    if (pending) {
+      setScannedBag(pending);
+      setSealStatusOverride(pending.isSealIntact);
+    }
+  };
+
+  // Payout and Accept
+  const handleAcceptAndPayFarmer = () => {
+    if (!scannedBag) return;
+
+    if (!sealStatusOverride) {
+      alert(`⚠️ Cannot auto-payout damaged seal! Logged to Ops Review Queue with reason: "${brokenSealReason}".`);
+      setBags(prev => prev.map(b => b.id === scannedBag.id ? { ...b, status: 'FLAGGED', isSealIntact: false } : b));
+      setScannedBag(null);
+      return;
+    }
+
+    setIsProcessingPayment(true);
+    setTimeout(() => {
+      setIsProcessingPayment(false);
+      setPaymentSuccessToast(`✅ ${formatDualCurrency(scannedBag.payoutAmountInr).inr} (${formatDualCurrency(scannedBag.payoutAmountInr).usdc}) sent to ${scannedBag.collectorName}'s wallet via Smart Contract!`);
+      setBags(prev => prev.map(b => b.id === scannedBag.id ? { ...b, status: 'ACCEPTED' } : b));
+      setScannedBag(null);
+      setTimeout(() => setPaymentSuccessToast(null), 5000);
+    }, 1800);
+  };
+
+  // Processing record submission
+  const handleSaveProcessingRecord = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBatch) return;
-    setMsg(null);
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/processing-events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchId: selectedBatch.id, eventType, notes: eventNotes })
-      });
-      const data = await res.json();
-      setMsg({ text: data.success ? 'Processing event added!' : 'Failed.', success: !!data.success });
-      if (data.success) { fetchBatches(); setEventNotes(''); }
-    } finally {
-      setIsSubmitting(false);
-    }
+    setBlockchainActionText(`Anchoring drying (${dryingTemp}°C, ${dryingHours}h) & milling specs on-chain.`);
+    setShowBlockchainModal(true);
   };
 
-  const handleMerge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedIds.length < 2) { setMsg({ text: 'Select at least 2 batches to merge.', success: false }); return; }
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/batches/merge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batchIds: selectedIds, notes: mergeNotes })
-      });
-      const data = await res.json();
-      setMsg({ text: data.success ? 'Batches merged into new lot!' : 'Failed.', success: !!data.success });
-      if (data.success) { fetchBatches(); setSelectedIds([]); setMergeNotes(''); }
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleBlockchainModalDone = () => {
+    setShowBlockchainModal(false);
+    alert('✅ Processing parameters immutably written to Ethereum Sepolia ledger.');
+    setSelectedBatchForProcess(null);
   };
 
-  const toggleId = (id: number) => setSelectedIds(prev =>
-    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-  );
+  // Merge logic
+  const handlePrepareMerge = () => {
+    if (selectedBagIds.length < 2) {
+      alert('Please select at least 2 accepted bags to create a unified lot.');
+      return;
+    }
+    const selected = bags.filter(b => selectedBagIds.includes(b.id));
+    const totalRawKg = selected.reduce((s, b) => s + b.quantityKg, 0);
+    // Pre-fill expected ~65% dry weight
+    setDryWeightInput(Math.round(totalRawKg * 0.65).toString());
+    setConfirmLotNameInput('');
+    setMergeDiscrepancyWarning(null);
+    setShowMergeModal(true);
+  };
+
+  const handleValidateAndMerge = () => {
+    const selected = bags.filter(b => selectedBagIds.includes(b.id));
+    const totalRawKg = selected.reduce((s, b) => s + b.quantityKg, 0);
+    const enteredDryKg = parseFloat(dryWeightInput) || 0;
+
+    const retentionRatio = enteredDryKg / totalRawKg;
+    if (retentionRatio < 0.35 || retentionRatio > 0.95) {
+      setMergeDiscrepancyWarning(`⚠️ Extreme moisture retention mismatch: Raw was ${totalRawKg}kg, dry logged is ${enteredDryKg}kg (${Math.round(retentionRatio * 100)}%). This will trigger an automatic Ops Fraud Flag.`);
+    }
+
+    if (confirmLotNameInput.trim().toLowerCase() !== lotName.trim().toLowerCase()) {
+      alert(`Please type the exact Lot ID "${lotName}" to confirm this irreversible on-chain action.`);
+      return;
+    }
+
+    // Create new Lot
+    const newLot: LotItem = {
+      id: lotName,
+      name: `Lot ${lotName} (${selected[0]?.herbName || 'Herbs'})`,
+      species: selected[0]?.herbName || 'Herbs',
+      originalWeightKg: totalRawKg,
+      processedWeightKg: enteredDryKg,
+      createdAt: new Date().toISOString().split('T')[0],
+      sourceBagIds: selected.map(b => b.batchId),
+      labStatus: 'PENDING',
+      processingHistory: [
+        { dryingTemp: '42°C', dryingHours: '18 hrs', grindingMachineId: 'MILL-HAMMER-04', date: new Date().toISOString().split('T')[0] }
+      ]
+    };
+
+    setLots(prev => [newLot, ...prev]);
+    setShowMergeModal(false);
+    setSelectedBagIds([]);
+    setActiveTab('lots');
+    setSelectedLotDetail(newLot);
+  };
+
+  const toggleSelectBag = (id: number) => {
+    setSelectedBagIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-24">
-      {/* Premium Tab Bar */}
-      <div className="tab-bar">
-        {(['incoming', 'process', 'merge'] as const).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`tab-item ${activeTab === tab ? 'active' : ''}`}>
-            {tab === 'incoming' ? '📦 Incoming' : tab === 'process' ? '⚙️ Process' : '🔗 Merge'}
-          </button>
-        ))}
+    <div className="max-w-4xl mx-auto space-y-6 pb-24 text-slate-100 animate-fade-in-up">
+      {/* Screen A2 — Top Summary Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="glass-card p-4 space-y-1">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Bags Received Today</p>
+          <p className="text-2xl font-black text-white">{stats.bagsReceivedToday} <span className="text-sm font-normal text-slate-400">bags</span></p>
+          <p className="text-xs text-emerald-400 font-semibold">100% NFC Verified</p>
+        </div>
+
+        <div className="glass-card p-4 space-y-1">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pending Payouts</p>
+          <p className="text-2xl font-black text-amber-300">{formatDualCurrency(stats.pendingPayoutsInr).inr}</p>
+          <p className="text-[11px] text-slate-400 font-mono">{formatDualCurrency(stats.pendingPayoutsInr).usdc}</p>
+        </div>
+
+        <div className="glass-card p-4 space-y-1">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Lots in Processing</p>
+          <p className="text-2xl font-black text-emerald-400">{lots.length} Lots</p>
+          <p className="text-xs text-slate-400">Drying & Milling Hub</p>
+        </div>
       </div>
 
-      {msg && (
-        <div className={msg.success ? 'alert-success' : 'alert-error'}>
-          {msg.text}
+      {/* Success Toast */}
+      {paymentSuccessToast && (
+        <div className="p-4 bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 rounded-xl text-sm font-semibold animate-fade-in-up flex items-center justify-between">
+          <span>{paymentSuccessToast}</span>
+          <button onClick={() => setPaymentSuccessToast(null)} className="text-xs text-emerald-400 underline">Dismiss</button>
         </div>
       )}
 
+      {/* Navigation Tabs */}
+      <div className="tab-bar">
+        <button onClick={() => setActiveTab('incoming')} className={`tab-item ${activeTab === 'incoming' ? 'active' : ''}`}>
+          📡 Scan & Intake ({bags.filter(b => b.status === 'PENDING_SCAN').length})
+        </button>
+        <button onClick={() => setActiveTab('accepted')} className={`tab-item ${activeTab === 'accepted' ? 'active' : ''}`}>
+          📋 Accepted Bags ({bags.filter(b => b.status === 'ACCEPTED').length})
+        </button>
+        <button onClick={() => setActiveTab('processing')} className={`tab-item ${activeTab === 'processing' ? 'active' : ''}`}>
+          ⚙️ Processing Logs
+        </button>
+        <button onClick={() => setActiveTab('lots')} className={`tab-item ${activeTab === 'lots' ? 'active' : ''}`}>
+          📦 Lot Management ({lots.length})
+        </button>
+      </div>
+
+      {/* Screen A3 — Incoming Bags & NFC Scan Queue */}
       {activeTab === 'incoming' && (
         <div className="space-y-4">
-          {loading && (
-            <div className="flex justify-center items-center py-16">
-              <div className="spinner"></div>
+          <div className="glass-card p-5 flex flex-col sm:flex-row justify-between items-center gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950">
+            <div>
+              <h3 className="font-bold text-white text-base">Warehouse Intake & NFC Tag Reader</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Scan physical NFC zip-ties to verify tamper seals and unlock payment</p>
             </div>
-          )}
-          {error && (
-            <div className="alert-error text-center">
-              <p>{error}</p>
-              <Button variant="secondary" onClick={fetchBatches} className="mt-3">Retry</Button>
-            </div>
-          )}
-          {!loading && !error && batches.length === 0 && (
-            <div className="empty-state">
-              <div className="empty-state-icon">📭</div>
-              <p className="empty-state-title">No incoming batches</p>
-              <p className="empty-state-subtitle">Waiting for collectors to log new validated harvests.</p>
-            </div>
-          )}
-          {!loading && !error && batches.map((b, i) => (
-            <Card key={b.id} className={`animate-fade-in-up stagger-${Math.min(i + 1, 5)}`}>
-              <div className="flex justify-between items-start">
+            <Button onClick={handleTriggerNfcScan} className="py-3 px-6 text-sm font-bold flex items-center gap-2 whitespace-nowrap">
+              <span>📡</span>
+              <span>Scan NFC Tag</span>
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Awaiting Scan & Inspection</h4>
+            {bags.filter(b => b.status === 'PENDING_SCAN' || b.status === 'FLAGGED').map(b => (
+              <div key={b.id} className="glass-card p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                  <h4 className="font-bold text-lg text-slate-800">{b.herbName}</h4>
-                  <p className="text-sm text-slate-500 mt-1">{b.quantityKg} kg · Collector: {b.collector?.name}</p>
-                  <p className="text-xs text-slate-400 mt-1">Events: {b.processingEvents?.length || 0}</p>
-                  <span className={`status-badge mt-2 ${b.status === 'AGGREGATED' ? 'aggregated' : 'collected'}`}>{b.status}</span>
+                  <div className="flex items-center gap-2">
+                    <h5 className="font-bold text-white text-base">{b.herbName}</h5>
+                    <span className="text-xs font-mono text-slate-400">({b.batchId})</span>
+                    {b.status === 'FLAGGED' && (
+                      <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold px-2 py-0.5 rounded">
+                        ⚠️ FLAGGED SEAL
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {b.quantityKg} kg • Collector: <strong className="text-slate-300">{b.collectorName}</strong> • Tag: #{b.sealId}
+                  </p>
                 </div>
-                <Button variant="secondary" onClick={() => { setPaymentBatchId(b.id); setShowPayment(true); }}>💳 Pay</Button>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="text-base font-bold text-emerald-400">{formatDualCurrency(b.payoutAmountInr).inr}</span>
+                    <p className="text-[10px] text-slate-500 font-mono">{formatDualCurrency(b.payoutAmountInr).usdc}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setScannedBag(b);
+                      setSealStatusOverride(b.isSealIntact);
+                    }}
+                    className="btn-primary text-xs py-2 px-3.5"
+                  >
+                    Inspect & Pay ➔
+                  </button>
+                </div>
               </div>
-              {b.latitude && b.longitude && (
-                <div className="h-28 w-full rounded-xl overflow-hidden mt-3 border border-slate-200/50">
-                  <MapContainer center={[b.latitude, b.longitude]} zoom={11} style={{ height: '100%', width: '100%' }} zoomControl={false} dragging={false}>
-                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                    <Marker position={[b.latitude, b.longitude]}><Popup>{b.herbName}</Popup></Marker>
-                  </MapContainer>
-                </div>
-              )}
-            </Card>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
-      {activeTab === 'process' && (
-        <Card title="Add Processing Event" className="animate-fade-in-up">
-          {batches.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">⚙️</div>
-              <p className="empty-state-title">No batches to process.</p>
-              <p className="empty-state-subtitle">Wait for new incoming validated batches.</p>
+      {/* Screen A3 Slide-Up Inspection Modal */}
+      {scannedBag && (
+        <div className="modal-overlay" style={{ zIndex: 120 }}>
+          <div className="modal-content max-w-lg p-6 rounded-2xl bg-slate-950 border border-slate-700 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <span className="text-xs font-mono text-emerald-400 font-bold">NFC TAG #{scannedBag.sealId}</span>
+                <h3 className="text-lg font-bold text-white">{scannedBag.herbName} Intake Inspection</h3>
+              </div>
+              <button onClick={() => setScannedBag(null)} className="text-slate-400">✕</button>
             </div>
-          ) : (
-            <form onSubmit={handleAddEvent} className="space-y-4">
+
+            {/* Farmer Details & Map */}
+            <div className="grid grid-cols-2 gap-3 text-xs bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
               <div>
-                <label className="input-label">Select Batch</label>
-                <select className="input-field"
-                  onChange={e => setSelectedBatch(batches.find(b => b.id === parseInt(e.target.value)) || null)} required>
-                  <option value="">-- Select a batch --</option>
-                  {batches.map(b => <option key={b.id} value={b.id}>{b.herbName} · {b.batchId}</option>)}
-                </select>
+                <span className="text-slate-400">Collector:</span>
+                <p className="font-bold text-white">{scannedBag.collectorName}</p>
+                <span className="text-slate-400 mt-1 block">Weight:</span>
+                <p className="font-bold text-emerald-400">{scannedBag.quantityKg} kg</p>
               </div>
               <div>
-                <label className="input-label">Event Type</label>
-                <select className="input-field" value={eventType} onChange={e => setEventType(e.target.value)}>
-                  <option value="DRYING">🌡️ Drying</option>
-                  <option value="GRINDING">⚙️ Grinding</option>
-                  <option value="STORAGE">📦 Storage</option>
-                </select>
+                <span className="text-slate-400">AI Confidence:</span>
+                <p className="font-bold text-emerald-400">{scannedBag.aiConfidence}% ViT Match</p>
+                <span className="text-slate-400 mt-1 block">GPS Origin:</span>
+                <p className="font-mono text-slate-300">{scannedBag.latitude}, {scannedBag.longitude}</p>
               </div>
+            </div>
+
+            {/* Tamper Seal Check */}
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+              <label className="input-label">Physical NFC Seal Status</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSealStatusOverride(true)}
+                  className={`py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                    sealStatusOverride ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <span>✅</span>
+                  <span>Seal Intact</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSealStatusOverride(false)}
+                  className={`py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                    !sealStatusOverride ? 'bg-red-500/20 border-red-400 text-red-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <span>⚠️</span>
+                  <span>Seal Broken / Damaged</span>
+                </button>
+              </div>
+
+              {!sealStatusOverride && (
+                <div className="space-y-1 pt-1 animate-fade-in-up">
+                  <label className="text-[11px] text-red-300 font-semibold">Select Reason for Audit Trail:</label>
+                  <select
+                    value={brokenSealReason}
+                    onChange={e => setBrokenSealReason(e.target.value)}
+                    className="input-field text-xs text-red-200 bg-red-950/30 border-red-500/40"
+                  >
+                    <option value="Physically damaged during transit">Physically damaged during transit</option>
+                    <option value="Suspected tampering / Opened knot">Suspected tampering / Opened knot</option>
+                    <option value="Moisture degraded tag chip">Moisture degraded tag chip</option>
+                    <option value="Weight mismatch against field log">Weight mismatch against field log</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Payout Trigger Card */}
+            <div className="flex justify-between items-center p-3.5 bg-emerald-950/30 border border-emerald-500/30 rounded-xl">
               <div>
-                <label className="input-label">Notes</label>
-                <textarea className="input-field" rows={3}
-                  value={eventNotes} onChange={e => setEventNotes(e.target.value)} />
+                <span className="text-[11px] text-slate-400">Direct Smart Contract Payout:</span>
+                <p className="text-xl font-black text-white">{formatDualCurrency(scannedBag.payoutAmountInr).inr}</p>
+                <p className="text-[10px] text-slate-400 font-mono">{formatDualCurrency(scannedBag.payoutAmountInr).usdc}</p>
               </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Processing...' : '⚙️ Add Processing Event'}
+              <Button
+                onClick={handleAcceptAndPayFarmer}
+                disabled={isProcessingPayment}
+                className="py-3 px-5 text-sm"
+              >
+                {isProcessingPayment ? 'Processing Payout...' : sealStatusOverride ? '💳 Accept & Pay Farmer' : '⚠️ Route to Review Queue'}
               </Button>
-            </form>
-          )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Screen A4 — Accepted Bags Table & Multi-Select for Lot Creation */}
+      {activeTab === 'accepted' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-white text-base">Accepted Inventory</h3>
+              <p className="text-xs text-slate-400">Select multiple bags to merge into a single batch lot</p>
+            </div>
+            {selectedBagIds.length > 0 && (
+              <Button onClick={handlePrepareMerge} className="py-2 px-4 text-xs font-bold">
+                🔗 Create Lot ({selectedBagIds.length} bags)
+              </Button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                <tr>
+                  <th className="p-3 w-10 text-center">Select</th>
+                  <th className="p-3">Batch ID</th>
+                  <th className="p-3">Species</th>
+                  <th className="p-3">Farmer</th>
+                  <th className="p-3">Weight</th>
+                  <th className="p-3">Date</th>
+                  <th className="p-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 bg-slate-950/60">
+                {bags.filter(b => b.status === 'ACCEPTED').map(b => (
+                  <tr key={b.id} className="hover:bg-slate-900/40">
+                    <td className="p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedBagIds.includes(b.id)}
+                        onChange={() => toggleSelectBag(b.id)}
+                        className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+                      />
+                    </td>
+                    <td className="p-3 font-mono font-bold text-slate-200">{b.batchId}</td>
+                    <td className="p-3 font-semibold text-white">{b.herbName}</td>
+                    <td className="p-3 text-slate-300">{b.collectorName}</td>
+                    <td className="p-3 font-bold text-emerald-400">{b.quantityKg} kg</td>
+                    <td className="p-3 text-slate-400">{new Date(b.harvestDate).toLocaleDateString()}</td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => {
+                          setSelectedBatchForProcess(b);
+                          setActiveTab('processing');
+                        }}
+                        className="text-xs text-emerald-400 hover:underline font-semibold"
+                      >
+                        Log Processing ➔
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Screen A5 — Processing Log Entry */}
+      {activeTab === 'processing' && (
+        <Card className="p-6 space-y-5">
+          <div>
+            <h3 className="text-lg font-bold text-white">Log Processing Record (Drying & Milling)</h3>
+            <p className="text-xs text-slate-400">
+              {selectedBatchForProcess 
+                ? `Recording parameters for selected batch: ${selectedBatchForProcess.herbName} (${selectedBatchForProcess.batchId})`
+                : 'Record machine parameters for cryptographic batch compliance'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveProcessingRecord} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="input-label">Drying Temperature (°C)</label>
+                <input
+                  type="number"
+                  value={dryingTemp}
+                  onChange={e => setDryingTemp(e.target.value)}
+                  className="input-field text-sm font-bold"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="input-label">Drying Duration (Hours)</label>
+                <input
+                  type="number"
+                  value={dryingHours}
+                  onChange={e => setDryingHours(e.target.value)}
+                  className="input-field text-sm font-bold"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="input-label">Grinding Machine / Hammer Mill ID</label>
+                <input
+                  type="text"
+                  value={grindingMachineId}
+                  onChange={e => setGrindingMachineId(e.target.value)}
+                  className="input-field text-sm font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="input-label">Processing Date</label>
+                <input
+                  type="date"
+                  defaultValue={new Date().toISOString().split('T')[0]}
+                  className="input-field text-sm"
+                  required
+                />
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full py-3">
+              ⛓️ Save Processing Record On-Chain
+            </Button>
+          </form>
         </Card>
       )}
 
-      {activeTab === 'merge' && (
-        <Card title="Merge Batches into Lot" className="animate-fade-in-up">
-          {batches.length < 2 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">🔗</div>
-              <p className="empty-state-title">Not enough batches</p>
-              <p className="empty-state-subtitle">You need at least 2 batches available to merge.</p>
+      {/* Screen A6 Merge Confirmation Modal & Genealogy Tree */}
+      {showMergeModal && (
+        <div className="modal-overlay" style={{ zIndex: 120 }}>
+          <div className="modal-content max-w-lg p-6 rounded-2xl bg-slate-950 border border-slate-700 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-white">Create Lot (Irreversible Merge)</h3>
+              <button onClick={() => setShowMergeModal(false)} className="text-slate-400">✕</button>
             </div>
-          ) : (
-            <form onSubmit={handleMerge} className="space-y-4">
-              <p className="text-sm text-slate-400">Select 2+ batches to merge into a combined lot:</p>
-              <div className="space-y-2 max-h-60 overflow-y-auto border border-white/5 rounded-xl p-3">
-                {batches.map(b => (
-                  <label key={b.id} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
-                    <input type="checkbox" className="w-4 h-4 rounded accent-white" checked={selectedIds.includes(b.id)} onChange={() => toggleId(b.id)} />
-                    <span className="text-sm text-slate-200">{b.herbName} — {b.quantityKg}kg ({b.batchId})</span>
-                  </label>
+
+            {/* Selected Chips */}
+            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+              <span className="text-xs font-bold text-slate-400 uppercase">Selected Bags:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {bags.filter(b => selectedBagIds.includes(b.id)).map(b => (
+                  <span key={b.id} className="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-1 rounded-lg border border-emerald-500/30">
+                    🌿 {b.batchId} ({b.quantityKg}kg)
+                  </span>
                 ))}
               </div>
-              <div>
-                <label className="input-label">Notes</label>
-                <textarea className="input-field" rows={2} value={mergeNotes} onChange={e => setMergeNotes(e.target.value)} />
+            </div>
+
+            {/* Genealogy Tree Graphic */}
+            <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800 text-center space-y-2">
+              <span className="text-xs font-bold text-slate-400">Genealogy Convergence Tree</span>
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <div className="flex flex-col gap-1 text-xs text-slate-300">
+                  <span>🍃 Farm #1</span>
+                  <span>🍃 Farm #2</span>
+                </div>
+                <span className="text-emerald-400 font-bold text-xl">➔</span>
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl border border-emerald-500/40">
+                  🏺
+                </div>
               </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? 'Merging...' : `🔗 Merge Selected (${selectedIds.length})`}
-              </Button>
-            </form>
-          )}
-        </Card>
+            </div>
+
+            {/* Weight reconciliation */}
+            <div>
+              <label className="input-label">Logged Dry Weight Post-Drying (kg)</label>
+              <input
+                type="number"
+                value={dryWeightInput}
+                onChange={e => setDryWeightInput(e.target.value)}
+                className="input-field text-base font-bold text-emerald-400"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Expected 60–70% retention after moisture drying.</p>
+            </div>
+
+            {mergeDiscrepancyWarning && (
+              <div className="p-3 bg-red-950/40 border border-red-500/40 text-red-300 rounded-xl text-xs">
+                {mergeDiscrepancyWarning}
+              </div>
+            )}
+
+            {/* Type Lot Name to Confirm */}
+            <div className="space-y-1.5">
+              <label className="input-label">Lot Name / ID:</label>
+              <input
+                type="text"
+                value={lotName}
+                onChange={e => setLotName(e.target.value)}
+                className="input-field text-sm font-mono"
+              />
+              <label className="input-label text-amber-300 pt-2">Type exact Lot ID "{lotName}" to confirm irreversible merge:</label>
+              <input
+                type="text"
+                placeholder={lotName}
+                value={confirmLotNameInput}
+                onChange={e => setConfirmLotNameInput(e.target.value)}
+                className="input-field text-sm font-mono"
+              />
+            </div>
+
+            <Button onClick={handleValidateAndMerge} className="w-full py-3">
+              Confirm & Merge into Lot ➔
+            </Button>
+          </div>
+        </div>
       )}
 
-      {showPayment && <PaymentModal batchId={paymentBatchId} onClose={() => setShowPayment(false)} onSuccess={fetchBatches} />}
+      {/* Screen A7 — Lot Detail & Management */}
+      {activeTab === 'lots' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-bold text-white text-base">Active Lots in Processing</h3>
+            {selectedLotDetail && (
+              <button onClick={() => setSelectedLotDetail(null)} className="text-xs text-slate-400 hover:text-white underline">
+                Clear Selection
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {lots.map(l => (
+              <div 
+                key={l.id} 
+                onClick={() => setSelectedLotDetail(l)}
+                className={`glass-card p-5 space-y-3 cursor-pointer transition ${selectedLotDetail?.id === l.id ? 'border-emerald-500/60 bg-slate-900/90 shadow-lg' : ''}`}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-white text-base">{l.name}</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">Created: {l.createdAt} • {l.species}</p>
+                  </div>
+                  <span className={`status-badge ${
+                    l.labStatus === 'PASSED' ? 'tested' : l.labStatus === 'PENDING' ? 'aggregated' : 'collected'
+                  }`}>
+                    Lab: {l.labStatus}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                  <div>
+                    <span className="text-slate-500">Raw Weight:</span>
+                    <p className="font-bold text-slate-300">{l.originalWeightKg} kg</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Processed Yield:</span>
+                    <p className="font-bold text-emerald-400">{l.processedWeightKg} kg</p>
+                  </div>
+                </div>
+
+                <div className="text-xs text-slate-400">
+                  <strong>Source Batches:</strong> {l.sourceBagIds.join(', ')}
+                </div>
+
+                {l.buyerName && (
+                  <div className="text-xs text-slate-300 pt-1">
+                    <strong>Assigned Buyer:</strong> {l.buyerName}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ⛓️ On-Chain Confirmation Modal */}
+      <BlockchainTxModal
+        isOpen={showBlockchainModal}
+        title="Recording Processing Parameters"
+        actionSummary={blockchainActionText}
+        durationMs={6000}
+        onClose={handleBlockchainModalDone}
+      />
     </div>
   );
 };
