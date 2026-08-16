@@ -13,56 +13,38 @@ export interface FlaggedItem {
   status: 'PENDING' | 'RESOLVED' | 'REJECTED';
 }
 
-const INITIAL_FLAGS: FlaggedItem[] = [
-  {
-    id: 'FLG-1049',
-    type: 'SEAL_BROKEN',
-    severity: 'high',
-    title: 'Damaged NFC Zip-Tie on Herb Intake',
-    details: 'Bag #NFC-7712 scanned at Mandi Aggregator Hub with physical tear. Suspected tampering or transport damage.',
-    sourceId: 'BATCH-88319',
-    reporter: 'Mandi Depot Hub #4',
-    timestamp: '15 mins ago',
-    status: 'PENDING'
-  },
-  {
-    id: 'FLG-1048',
-    type: 'AI_CONFIDENCE',
-    severity: 'medium',
-    title: 'Species Confidence 68% (Pending Spot-Check)',
-    details: 'Visual camera photo showed partial shade. Auto-classified as Ashwagandha with 68% confidence. Needs expert review.',
-    sourceId: 'BATCH-88312',
-    reporter: 'Edge Vision AI v2.1',
-    timestamp: '1 hour ago',
-    status: 'PENDING'
-  },
-  {
-    id: 'FLG-1047',
-    type: 'WEIGHT_MISMATCH',
-    severity: 'high',
-    title: 'Herb Moisture Retention Anomaly',
-    details: 'Pre-drying total was 100kg, post-drying yield only 28kg (Expected 60-70kg for Brahmi). Potential filler or skimming.',
-    sourceId: 'LOT-2291',
-    reporter: 'Warehouse Scale System #2',
-    timestamp: '3 hours ago',
-    status: 'PENDING'
-  },
-  {
-    id: 'FLG-1046',
-    type: 'GPS_MISMATCH',
-    severity: 'low',
-    title: 'GPS Drift Outside Certified Zone (±22m)',
-    details: 'Coordinates located 18 meters past the certified forest polygon border in Wayanad Reserve.',
-    sourceId: 'BATCH-88290',
-    reporter: 'GeoFenceValidator.sol',
-    timestamp: '5 hours ago',
-    status: 'PENDING'
-  }
-];
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001';
 
 export const ReviewQueueModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const [items, setItems] = useState<FlaggedItem[]>(INITIAL_FLAGS);
+  const [items, setItems] = useState<FlaggedItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'PENDING' | 'RESOLVED'>('ALL');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setIsLoading(true);
+      fetch(`${API_BASE}/api/batches/flagged`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            const mapped: FlaggedItem[] = data.map((b: any) => ({
+              id: `FLG-${b.id + 1040}`,
+              type: b.weightMismatch ? 'WEIGHT_MISMATCH' : (b.aiConfidence < 80 ? 'AI_CONFIDENCE' : 'SEAL_BROKEN'),
+              severity: b.weightMismatch ? 'high' : (b.aiConfidence < 50 ? 'high' : 'medium'),
+              title: b.weightMismatch ? 'Warehouse Scale Weight Discrepancy' : `${b.herbName} AI Confidence ${b.aiConfidence || 68}% (Spot-Check)`,
+              details: b.weightMismatch ? `Aggregator scale weight diverges from declared ${b.quantityKg}kg harvest.` : `Edge AI vision flagged ${b.herbName} batch #${b.batchId} for manual inspection before depot intake.`,
+              sourceId: b.batchId,
+              reporter: b.collector?.name || 'Mandi Depot Intake System',
+              timestamp: new Date(b.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              status: 'PENDING'
+            }));
+            setItems(mapped);
+          }
+          setIsLoading(false);
+        })
+        .catch(() => setIsLoading(false));
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -121,7 +103,11 @@ export const ReviewQueueModal: React.FC<{ isOpen: boolean; onClose: () => void }
 
         {/* Items List */}
         <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12 text-slate-400 text-sm animate-pulse">
+              ⏳ Scanning flagged batches from database...
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-sm">
               ✨ No items matching the filter. All integrity checks cleared!
             </div>

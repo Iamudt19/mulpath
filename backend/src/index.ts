@@ -504,6 +504,29 @@ app.get('/api/batches/awaiting-test', async (req: Request, res: Response): Promi
   }
 });
 
+// GET: Flagged batches for Ops Review Queue
+app.get('/api/batches/flagged', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const batches = await prisma.herbBatch.findMany({
+      where: {
+        OR: [
+          { aiFlagged: true },
+          { weightMismatch: true },
+          { aiConfidence: { lt: 80 } },
+          { status: 'COLLECTED' }
+        ]
+      },
+      include: {
+        collector: { select: { name: true, email: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return res.status(200).json(batches);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch flagged batches' });
+  }
+});
+
 // POST: Upload test report (Lab)
 const testUpload = multer({ dest: 'uploads/reports/' });
 app.post('/api/test-reports', testUpload.single('report'), async (req: Request, res: Response): Promise<any> => {
