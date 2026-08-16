@@ -381,15 +381,15 @@ async function verifySpeciesAI(photoFile: Express.Multer.File | undefined, claim
     }
   }
 
-  // 4. HuggingFace Vision Inference (with strict 4s timeout to avoid cold-start delays)
+  // 4. Custom-Trained Ayurvedic ViT Vision Transformer (iamudit02/ayurvedic-herbs-vit)
   if (process.env.HUGGINGFACE_API_KEY) {
     try {
       const imageBuffer = fs.readFileSync(photoFile.path);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-second fail-fast timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const response = await fetch(
-        "https://api-inference.huggingface.co/models/google/vit-base-patch16-224",
+        "https://api-inference.huggingface.co/models/iamudit02/ayurvedic-herbs-vit",
         {
           headers: {
             Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
