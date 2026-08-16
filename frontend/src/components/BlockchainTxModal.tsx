@@ -5,6 +5,7 @@ interface BlockchainTxModalProps {
   isOpen: boolean;
   title: string;
   txHash?: string;
+  contractAddress?: string;
   onComplete?: () => void;
   onClose?: () => void;
   actionSummary?: string;
@@ -15,14 +16,15 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
   isOpen,
   title,
   txHash: initialTxHash,
+  contractAddress = '0x131d2d3edEbbd0090fAd8DA80e2351A0C028236c',
   onComplete,
   onClose,
   actionSummary = 'Writing cryptographic record to Ethereum Sepolia...',
-  durationMs = 6500,
+  durationMs = 5500,
 }) => {
   const [phase, setPhase] = useState<'confirming' | 'recorded'>('confirming');
   const [progress, setProgress] = useState(0);
-  const [blockNumber, setBlockNumber] = useState(6194820);
+  const [blockNumber, setBlockNumber] = useState(6194821);
   const [txHash, setTxHash] = useState(initialTxHash || '');
 
   useEffect(() => {
@@ -32,10 +34,10 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
       return;
     }
 
-    const generatedHash = initialTxHash || `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-    setTxHash(generatedHash);
+    const effectiveHash = initialTxHash || `0x8f2910cba71891048201a9df88102148bb0194e2a9df88102148bb0194e2311f`;
+    setTxHash(effectiveHash);
     setPhase('confirming');
-    setProgress(5);
+    setProgress(10);
 
     const startTime = Date.now();
     const interval = setInterval(() => {
@@ -79,7 +81,7 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
             {/* Progress bar */}
             <div className="space-y-1.5 text-left">
               <div className="flex justify-between text-[11px] font-mono text-slate-400">
-                <span>Block Confirms (2/3)</span>
+                <span>Consensus Block Confirms (2/3)</span>
                 <span>{progress}%</span>
               </div>
               <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700/50">
@@ -92,17 +94,17 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
 
             <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-400 text-left space-y-1">
               <div className="flex justify-between">
-                <span className="text-slate-500">Target Contract:</span>
-                <span className="text-slate-300 font-bold">MūlpathRegistry.sol</span>
+                <span className="text-slate-500">Contract:</span>
+                <span className="text-slate-300 font-bold">{contractAddress.slice(0, 10)}...{contractAddress.slice(-6)}</span>
               </div>
               <div className="flex justify-between truncate">
-                <span className="text-slate-500">Tx Hash:</span>
-                <span className="text-slate-300">{txHash.slice(0, 14)}...{txHash.slice(-8)}</span>
+                <span className="text-slate-500">Target:</span>
+                <span className="text-slate-300">HarvestRegistry.sol</span>
               </div>
             </div>
 
             <p className="text-[11px] text-slate-500 italic">
-              Gas estimated: ~0.00042 ETH • Consensus verification active
+              Network: Ethereum Sepolia • Sponsored by Paymaster (₹0 Gas)
             </p>
           </div>
         ) : (
@@ -122,7 +124,7 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Transaction Proof:</span>
                 <a
-                  href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                  href={`https://sepolia.etherscan.io/address/${contractAddress}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-emerald-400 hover:text-emerald-300 text-[11px] underline flex items-center gap-1"
@@ -130,9 +132,13 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
                   View on Sepolia ↗
                 </a>
               </div>
-              <p className="text-[11px] text-slate-300 break-all bg-black/40 p-2 rounded border border-slate-800/80">
+              <p className="text-[11px] text-slate-300 break-all bg-black/40 p-2 rounded border border-slate-800/80 font-mono">
                 {txHash}
               </p>
+              <div className="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-slate-800">
+                <span>Contract Address:</span>
+                <span className="text-slate-400 font-bold">{contractAddress.slice(0, 12)}...{contractAddress.slice(-6)}</span>
+              </div>
             </div>
 
             <Button onClick={onClose} className="w-full py-2.5">

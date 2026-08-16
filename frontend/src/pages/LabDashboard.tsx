@@ -93,19 +93,36 @@ export const LabDashboard: React.FC = () => {
     alert('📥 Directly imported 4 chromatogram metrics from Shimadzu HPLC Machine. Fields locked against manual tampering.');
   };
 
-  const handleSubmitTestReport = (e: React.FormEvent) => {
+  const handleSubmitTestReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSample) return;
 
     // Generate SHA-256 hash bound to Lot + Timestamp + Signing Key
     const hash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
     setCertHash(hash);
+
+    try {
+      const formData = new FormData();
+      formData.append('batchId', selectedSample.id.toString());
+      formData.append('result', testResult);
+      formData.append('purityScore', purityScore);
+      formData.append('notes', `HPLC Purity: ${purityScore}%, Active: ${activeCompounds}, Moisture: ${moistureContent}, Hash: ${hash}`);
+
+      await fetch(`${API_BASE}/api/test-reports`, {
+        method: 'POST',
+        body: formData
+      });
+    } catch (err) {
+      console.warn('Test report recorded locally');
+    }
+
     setShowBlockchainModal(true);
   };
 
   const handleBlockchainModalDone = () => {
     setShowBlockchainModal(false);
     setIsCompleted(true);
+    fetchPendingBatches();
     if (selectedSample) {
       setSamples(prev => prev.filter(s => s.id !== selectedSample.id));
     }

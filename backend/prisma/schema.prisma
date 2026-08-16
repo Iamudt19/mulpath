@@ -43,38 +43,49 @@ model User {
 }
 
 model HerbBatch {
-  id              Int            @id @default(autoincrement())
-  batchId         String         @unique
-  herbName        String
-  quantityKg      Float
-  originLocation  String
-  latitude        Float?
-  longitude       Float?
-  photoUrl        String?
-  notes           String?
-  zoneValidated   Boolean        @default(false)
-  aiConfidence    Float?
-  aiFlagged       Boolean        @default(false)
-  harvestDate     DateTime
-  status          BatchStatus    @default(COLLECTED)
+  id                    Int            @id @default(autoincrement())
+  batchId               String         @unique
+  herbName              String
+  quantityKg            Float
+  originLocation        String
+  latitude              Float?
+  longitude             Float?
+  photoUrl              String?
+  notes                 String?
+  zoneValidated         Boolean        @default(false)
+  aiConfidence          Float?
+  aiFlagged             Boolean        @default(false)
+  harvestDate           DateTime
+  status                BatchStatus    @default(COLLECTED)
 
-  collectorId     Int
-  collector       User           @relation("CollectorRelation", fields: [collectorId], references: [id])
+  // Fraud Hardening Fields (#1 - #6)
+  sessionStartTimestamp DateTime?
+  challengeCode         String?
+  exifLatitude          Float?
+  exifLongitude         Float?
+  locationMismatch      Boolean        @default(false)
+  motionFlags           String?
+  sampleVialId          String?        @unique
+  aggregatorWeightKg    Float?
+  weightMismatch        Boolean        @default(false)
 
-  certificates    TestCertificate[]
-  priceTransfers  PriceTransfer[]
-  processingEvents ProcessingEvent[]
+  collectorId           Int
+  collector             User           @relation("CollectorRelation", fields: [collectorId], references: [id])
 
-  // Merging relations (using self-relation implicitly via join table if we use explicit array, but many-to-many is easier)
-  mergedIntoId    Int?
-  mergedInto      HerbBatch?     @relation("BatchMerges", fields: [mergedIntoId], references: [id])
-  sourceBatches   HerbBatch[]    @relation("BatchMerges")
+  certificates          TestCertificate[]
+  priceTransfers        PriceTransfer[]
+  processingEvents      ProcessingEvent[]
+
+  // Merging relations
+  mergedIntoId          Int?
+  mergedInto            HerbBatch?     @relation("BatchMerges", fields: [mergedIntoId], references: [id])
+  sourceBatches         HerbBatch[]    @relation("BatchMerges")
   
-  formulationId   Int?
-  formulation     Formulation?   @relation(fields: [formulationId], references: [id])
+  formulationId         Int?
+  formulation           Formulation?   @relation(fields: [formulationId], references: [id])
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 }
 
 model ProcessingEvent {
@@ -95,6 +106,8 @@ model Formulation {
   finalPriceInr       Float
   qrCodeUrl           String?
   fairTradePercentage Float?
+  invoiceHash         String?
+  invoiceUrl          String?
 
   batches             HerbBatch[]
 
