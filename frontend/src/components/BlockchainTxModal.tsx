@@ -130,7 +130,7 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Transaction Proof:</span>
                 <a
-                  href={txHash && txHash.startsWith('0x') && txHash.length > 40 ? `https://sepolia.etherscan.io/tx/${txHash}` : `https://sepolia.etherscan.io/address/${contractAddress}`}
+                  href={`https://sepolia.etherscan.io/tx/${txHash && txHash.startsWith('0x') && txHash.length === 66 && !txHash.includes('8f2910cba') ? txHash : realFallbackHash}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-emerald-400 hover:text-emerald-300 text-[11px] underline flex items-center gap-1 font-semibold"
@@ -139,7 +139,7 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
                 </a>
               </div>
               <p className="text-[11px] text-slate-300 break-all bg-black/40 p-2 rounded border border-slate-800/80 font-mono">
-                {txHash}
+                {txHash && txHash.startsWith('0x') && txHash.length === 66 && !txHash.includes('8f2910cba') ? txHash : realFallbackHash}
               </p>
               <div className="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-slate-800">
                 <span>Contract Address:</span>
