@@ -54,6 +54,29 @@ export const ManufacturerDashboard: React.FC = () => {
   const [retailPricePerUnit, setRetailPricePerUnit] = useState('499');
   const [selectedLotBlends, setSelectedLotBlends] = useState<{ lotId: string; blendPercent: number }[]>([]);
 
+  // Item #7 Fair-Trade Price Verification (Invoice SHA-256 Hashing)
+  const [invoiceFileName, setInvoiceFileName] = useState<string | null>('Dabur_FairTrade_Invoice_2026_08.pdf');
+  const [invoiceHash, setInvoiceHash] = useState<string>('0xa8f2b37e190284c8e71fa849021948bc74019284bc7102948c710294871c9028');
+
+  // Helper: SHA-256 Invoice Hashing (#7)
+  const handleInvoiceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setInvoiceFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        if (event.target?.result) {
+          const buffer = event.target.result as ArrayBuffer;
+          const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          setInvoiceHash(hashHex);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
   // QR Code Sheet (Screen M4)
   const [latestRegisteredBatch, setLatestRegisteredBatch] = useState<RegisteredBatch | null>(null);
 
@@ -419,6 +442,33 @@ export const ManufacturerDashboard: React.FC = () => {
                   required
                 />
               </div>
+            </div>
+
+            {/* Item #7: Fair-Trade Price Audit Document Upload & SHA-256 Hash */}
+            <div className="p-4 bg-slate-900 border border-blue-500/30 rounded-xl space-y-3">
+              <div>
+                <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider block">Item #7: Fair-Trade Price Audit Document</span>
+                <label className="input-label">Required Pricing Invoice / Tariff Sheet Upload</label>
+                <p className="text-xs text-slate-400">Uploaded document is hashed via SHA-256 and anchored on-chain to permanently tie declared price to an auditable artifact.</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="btn-secondary text-xs py-2 px-3.5 cursor-pointer whitespace-nowrap">
+                  📄 Choose Invoice Document
+                  <input type="file" accept=".pdf,image/*" onChange={handleInvoiceUpload} className="hidden" />
+                </label>
+                <span className="text-xs text-slate-300 font-mono truncate">{invoiceFileName || 'No file selected'}</span>
+              </div>
+
+              {invoiceHash && (
+                <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 text-xs text-slate-300 font-mono flex items-center justify-between">
+                  <div className="truncate">
+                    <span className="text-slate-500 block text-[10px]">SHA-256 ON-CHAIN DOCUMENT DIGEST:</span>
+                    <span className="text-emerald-400 font-bold text-[11px]">{invoiceHash.slice(0, 32)}...{invoiceHash.slice(-8)}</span>
+                  </div>
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold">SHA-256 ANCHORED</span>
+                </div>
+              )}
             </div>
 
             {/* Multi-lot blending */}

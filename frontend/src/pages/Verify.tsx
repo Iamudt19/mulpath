@@ -24,6 +24,7 @@ export const VerifyPage: React.FC = () => {
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [reportReason, setReportReason] = useState('Damaged packaging / Seal broken on delivery');
   const [reportComments, setReportComments] = useState('');
+  const [showRiskDetails, setShowRiskDetails] = useState(false);
 
   // Mock / Real data
   const [productData] = useState({
@@ -274,6 +275,53 @@ export const VerifyPage: React.FC = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Item #8 — Residual Risk Transparency Accordion */}
+      <div className="glass-card p-5 space-y-3 bg-slate-900/80 border border-slate-800">
+        <button
+          onClick={() => setShowRiskDetails(!showRiskDetails)}
+          className="w-full flex justify-between items-center text-left cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-base">🛡️</span>
+            <div>
+              <h4 className="font-bold text-white text-sm">How Verification Works: Cryptographic Assurances & Physical Limits</h4>
+              <p className="text-[11px] text-slate-400">Transparent breakdown of what is guaranteed vs physically deterred</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-emerald-400 font-mono">
+            {showRiskDetails ? '▲ Hide Details' : '▼ Expand Details'}
+          </span>
+        </button>
+
+        {showRiskDetails && (
+          <div className="pt-3 border-t border-slate-800 space-y-4 text-xs animate-fade-in-up">
+            {/* Cryptographic Guarantees */}
+            <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-1.5">
+              <span className="text-emerald-300 font-bold uppercase tracking-wider text-[10px] block">
+                🔒 What is Cryptographically Guaranteed (100% Immutable)
+              </span>
+              <ul className="space-y-1 text-slate-300 list-disc list-inside text-[11px]">
+                <li><strong>Post-Capture Data Integrity:</strong> Once logged on-chain, harvest GPS, lab reports, and payouts cannot be altered or retroactively deleted by anyone.</li>
+                <li><strong>Invoice Document Anchor:</strong> SHA-256 digests of manufacturer invoices are stored on-chain, proving the declared fair-trade price matches actual audit records.</li>
+                <li><strong>Live Challenge Code:</strong> Random 4-digit codes burned directly into photo frames during the 90-second atomic session prevent re-photographing static screens.</li>
+                <li><strong>NFC One-Time Tag Burning:</strong> Once an NFC zip-tie seal is registered to a batch, it cannot be reused on a secondary harvest.</li>
+              </ul>
+            </div>
+
+            {/* Deterred but not guaranteed */}
+            <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1.5">
+              <span className="text-amber-300 font-bold uppercase tracking-wider text-[10px] block">
+                ⚡ What is Deterred & Audited (Physical Real-World Limits)
+              </span>
+              <ul className="space-y-1 text-slate-300 list-disc list-inside text-[11px]">
+                <li><strong>Origin Physical Accuracy:</strong> Sensor fusion (accelerometer movement logging) and EXIF GPS cross-checks flag stationary or location-spoofed phones, but rely on hardware sensor honesty at the exact instant of collection.</li>
+                <li><strong>Physical Bag Tampering:</strong> Physical bag tampering before NFC sealing is mitigated by weight-check tie-ins at aggregator receiving scales and NABL lab HPLC chemical assays, which catch diluted or substituted herb species.</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Screen C5 — Trust Footer & Whistleblower Modal */}

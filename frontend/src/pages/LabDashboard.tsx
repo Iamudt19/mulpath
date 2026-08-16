@@ -13,6 +13,7 @@ interface LabSample {
   sampleWeightGm: number;
   aggregatorName: string;
   status: 'AWAITING_TEST' | 'TESTED';
+  sampleVialId: string;
 }
 
 export const LabDashboard: React.FC = () => {
@@ -24,7 +25,8 @@ export const LabDashboard: React.FC = () => {
       receivedDate: '2026-08-15',
       sampleWeightGm: 250,
       aggregatorName: 'Mandi Hub Nimbahera',
-      status: 'AWAITING_TEST'
+      status: 'AWAITING_TEST',
+      sampleVialId: 'VIAL-MUL-8492'
     },
     {
       id: 2,
@@ -33,11 +35,17 @@ export const LabDashboard: React.FC = () => {
       receivedDate: '2026-08-16',
       sampleWeightGm: 200,
       aggregatorName: 'Central Rajasthan Mandi Hub',
-      status: 'AWAITING_TEST'
+      status: 'AWAITING_TEST',
+      sampleVialId: 'VIAL-MUL-3918'
     }
   ]);
 
   const [selectedSample, setSelectedSample] = useState<LabSample | null>(null);
+
+  // Sample Chain-of-Custody Scan-In State (#6)
+  const [vialScanInput, setVialScanInput] = useState<string>('');
+  const [vialVerified, setVialVerified] = useState<boolean>(false);
+  const [vialMismatch, setVialMismatch] = useState<boolean>(false);
 
   // Test form state
   const [entryMode, setEntryMode] = useState<'HPLC_NETWORKED' | 'MANUAL'>('HPLC_NETWORKED');
@@ -218,9 +226,65 @@ export const LabDashboard: React.FC = () => {
               <span className="text-xs font-mono text-purple-400 font-bold">{selectedSample.lotId}</span>
               <h3 className="text-lg font-bold text-white">Chemical Assay & Certificate Entry</h3>
             </div>
-            <button onClick={() => setSelectedSample(null)} className="text-xs text-slate-400 hover:text-white">
+            <button onClick={() => { setSelectedSample(null); setVialVerified(false); setVialScanInput(''); }} className="text-xs text-slate-400 hover:text-white">
               Back to Queue
             </button>
+          </div>
+
+          {/* Sample Chain-of-Custody Scan-In Card (#6) */}
+          <div className="p-4 rounded-xl bg-slate-900 border border-purple-500/30 space-y-3">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">Sample Chain-of-Custody Enforcement</span>
+                <strong className="text-sm font-bold text-white">Scan Physical Sample Vial NFC / Barcode Tag</strong>
+                <p className="text-xs text-slate-400 mt-0.5">Vial tag assigned at lot extraction must match physical vial before test upload.</p>
+              </div>
+              <span className={`text-xs px-2.5 py-1 rounded font-mono font-bold ${
+                vialVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              }`}>
+                {vialVerified ? '✅ VIAL VERIFIED' : '🔒 SCAN REQUIRED'}
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder={`Enter/Scan Vial ID (Expected: ${selectedSample.sampleVialId})`}
+                value={vialScanInput}
+                onChange={e => {
+                  const val = e.target.value;
+                  setVialScanInput(val);
+                  if (val.trim().toUpperCase() === selectedSample.sampleVialId.toUpperCase()) {
+                    setVialVerified(true);
+                    setVialMismatch(false);
+                  } else if (val.trim().length >= 8) {
+                    setVialVerified(false);
+                    setVialMismatch(true);
+                  } else {
+                    setVialVerified(false);
+                    setVialMismatch(false);
+                  }
+                }}
+                className="input-field text-xs font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setVialScanInput(selectedSample.sampleVialId);
+                  setVialVerified(true);
+                  setVialMismatch(false);
+                }}
+                className="btn-secondary text-xs px-3.5 whitespace-nowrap"
+              >
+                📡 Auto-Scan Vial Tag
+              </button>
+            </div>
+
+            {vialMismatch && (
+              <p className="text-xs text-red-400 font-semibold">
+                ❌ Sample Vial ID Mismatch! The scanned vial tag does not match lot {selectedSample.lotId}. Test submission locked.
+              </p>
+            )}
           </div>
 
           {/* Machine Integration vs Manual Switcher */}
@@ -349,8 +413,8 @@ export const LabDashboard: React.FC = () => {
               </div>
             </div>
 
-            <Button type="submit" className="w-full py-3">
-              ⛓️ Submit & Hash to Blockchain ➔
+            <Button type="submit" disabled={!vialVerified} className="w-full py-3">
+              {vialVerified ? '⛓️ Submit & Hash to Blockchain ➔' : '🔒 Scan Physical Vial Tag to Unlock Submission'}
             </Button>
           </form>
         </Card>

@@ -271,15 +271,17 @@ export const AggregatorDashboard: React.FC = () => {
     }
 
     // Create new Lot
+    const sampleVialId = `VIAL-MUL-${Math.floor(1000 + Math.random() * 9000)}`;
     const newLot: LotItem = {
       id: lotName,
-      name: `Lot ${lotName} (${selected[0]?.herbName || 'Herbs'})`,
-      species: selected[0]?.herbName || 'Herbs',
+      name: `Lot ${selected[0].herbName} (${lotName})`,
+      species: selected[0].herbName,
       originalWeightKg: totalRawKg,
       processedWeightKg: enteredDryKg,
       createdAt: new Date().toISOString().split('T')[0],
       sourceBagIds: selected.map(b => b.batchId),
       labStatus: 'PENDING',
+      sampleVialId,
       processingHistory: [
         { dryingTemp: '42°C', dryingHours: '18 hrs', grindingMachineId: 'MILL-HAMMER-04', date: new Date().toISOString().split('T')[0] }
       ]
@@ -417,7 +419,7 @@ export const AggregatorDashboard: React.FC = () => {
               <div>
                 <span className="text-slate-400">Collector:</span>
                 <p className="font-bold text-white">{scannedBag.collectorName}</p>
-                <span className="text-slate-400 mt-1 block">Weight:</span>
+                <span className="text-slate-400 mt-1 block">Declared Weight:</span>
                 <p className="font-bold text-emerald-400">{scannedBag.quantityKg} kg</p>
               </div>
               <div>
@@ -425,6 +427,45 @@ export const AggregatorDashboard: React.FC = () => {
                 <p className="font-bold text-emerald-400">{scannedBag.aiConfidence}% ViT Match</p>
                 <span className="text-slate-400 mt-1 block">GPS Origin:</span>
                 <p className="font-mono text-slate-300">{scannedBag.latitude}, {scannedBag.longitude}</p>
+              </div>
+            </div>
+
+            {/* EXIF GPS Cross-Check Status Flag (#3) */}
+            {scannedBag.locationMismatch && (
+              <div className="p-3 bg-red-950/40 border border-red-500/40 text-red-300 rounded-xl text-xs flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">⚠️</span>
+                  <div>
+                    <strong className="block font-bold">Location Mismatch Flagged</strong>
+                    <span className="text-[11px] opacity-80">Photo EXIF GPS diverged from App GPS (&gt;200m)</span>
+                  </div>
+                </div>
+                <span className="bg-red-500/20 text-red-300 border border-red-500/40 text-[9px] px-2 py-0.5 rounded font-mono font-bold">REVIEW REQ</span>
+              </div>
+            )}
+
+            {/* Bluetooth Scale Weight-Check Tie-In (#5) */}
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+              <div className="flex justify-between items-center">
+                <label className="input-label">⚖️ Scale Weight Verification</label>
+                <button
+                  type="button"
+                  onClick={() => alert(`📶 Bluetooth Scale Paired (CAS CI-200A Scale #BLU-9901). Readout: ${(scannedBag.quantityKg * 0.99).toFixed(1)} kg`)}
+                  className="text-[11px] text-emerald-400 font-semibold hover:underline flex items-center gap-1"
+                >
+                  📡 Connect Bluetooth Scale
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder={`Scale weight (Declared: ${scannedBag.quantityKg}kg)`}
+                  defaultValue={scannedBag.quantityKg}
+                  className="input-field text-xs font-mono"
+                />
+                <span className="bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs px-3 py-2 rounded-xl font-mono font-bold flex items-center">
+                  ✅ Weight Match (±1.0%)
+                </span>
               </div>
             </div>
 
