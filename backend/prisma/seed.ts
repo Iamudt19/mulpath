@@ -27,8 +27,8 @@ async function main() {
     where: { email: 'ram.singh@mulpath.demo' },
     update: {},
     create: {
+      phone: '9876543210',
       email: 'ram.singh@mulpath.demo',
-      passwordHash: 'dummyhash',
       name: 'Ram Singh (Demo Collector)',
       role: 'COLLECTOR',
       walletAddress: '0x32BE5d84ceA924F758A6056214c15D01f46b5ea1',
@@ -39,8 +39,8 @@ async function main() {
     where: { email: 'shakti.enterprises@mulpath.demo' },
     update: {},
     create: {
+      phone: '9876543211',
       email: 'shakti.enterprises@mulpath.demo',
-      passwordHash: 'dummyhash',
       name: 'Shakti Enterprises (Demo Aggregator)',
       role: 'AGGREGATOR',
     },
@@ -50,8 +50,8 @@ async function main() {
     where: { email: 'ayush.labs@mulpath.demo' },
     update: {},
     create: {
+      phone: '9876543212',
       email: 'ayush.labs@mulpath.demo',
-      passwordHash: 'dummyhash',
       name: 'Ayush Quality Labs (Demo Lab)',
       role: 'LAB',
     },
@@ -61,8 +61,8 @@ async function main() {
     where: { email: 'vedic.pharma@mulpath.demo' },
     update: {},
     create: {
+      phone: '9876543213',
       email: 'vedic.pharma@mulpath.demo',
-      passwordHash: 'dummyhash',
       name: 'Vedic Pharma (Demo Manufacturer)',
       role: 'MANUFACTURER',
     },
