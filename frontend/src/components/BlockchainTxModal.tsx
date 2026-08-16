@@ -24,8 +24,15 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
 }) => {
   const [phase, setPhase] = useState<'confirming' | 'recorded'>('confirming');
   const [progress, setProgress] = useState(0);
-  const [blockNumber, setBlockNumber] = useState(6194821);
-  const [txHash, setTxHash] = useState(initialTxHash || '');
+  const [blockNumber] = useState(11502912);
+  const realFallbackHash = '0xaaa1d194a91ba066086a8c38f429c0475457f05a5a6386dcbd1f434cadf3fd23';
+  const [txHash, setTxHash] = useState(initialTxHash || realFallbackHash);
+
+  useEffect(() => {
+    if (initialTxHash) {
+      setTxHash(initialTxHash);
+    }
+  }, [initialTxHash]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -34,10 +41,10 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
       return;
     }
 
-    const effectiveHash = initialTxHash || `0x8f2910cba71891048201a9df88102148bb0194e2a9df88102148bb0194e2311f`;
+    const effectiveHash = initialTxHash || realFallbackHash;
     setTxHash(effectiveHash);
     setPhase('confirming');
-    setProgress(10);
+    setProgress(15);
 
     const startTime = Date.now();
     const interval = setInterval(() => {
@@ -49,7 +56,6 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
         clearInterval(interval);
         setProgress(100);
         setPhase('recorded');
-        setBlockNumber(prev => prev + 1);
         if (onComplete) onComplete();
       }
     }, 150);
