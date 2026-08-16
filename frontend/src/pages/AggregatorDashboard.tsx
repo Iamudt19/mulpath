@@ -56,13 +56,6 @@ interface LotItem {
 export const AggregatorDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'incoming' | 'accepted' | 'processing' | 'merge' | 'lots'>('incoming');
 
-  // Stats bar
-  const [stats] = useState({
-    bagsReceivedToday: 18,
-    pendingPayoutsInr: 22400,
-    activeLotsInProcessing: 3
-  });
-
   // Real Bags & Lots Data
   const [bags, setBags] = useState<IncomingBag[]>([]);
   const [lots, setLots] = useState<LotItem[]>([]);
@@ -305,14 +298,18 @@ export const AggregatorDashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="glass-card p-4 space-y-1">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Bags Received Today</p>
-          <p className="text-2xl font-black text-white">{stats.bagsReceivedToday} <span className="text-sm font-normal text-slate-400">bags</span></p>
-          <p className="text-xs text-emerald-400 font-semibold">100% NFC Verified</p>
+          <p className="text-2xl font-black text-white">{bags.length} <span className="text-sm font-normal text-slate-400">bags</span></p>
+          <p className="text-xs text-emerald-400 font-semibold">100% On-Chain Verified</p>
         </div>
 
         <div className="glass-card p-4 space-y-1">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pending Payouts</p>
-          <p className="text-2xl font-black text-amber-300">{formatDualCurrency(stats.pendingPayoutsInr).inr}</p>
-          <p className="text-[11px] text-slate-400 font-mono">{formatDualCurrency(stats.pendingPayoutsInr).usdc}</p>
+          <p className="text-2xl font-black text-amber-300">
+            {formatDualCurrency(bags.filter(b => b.status === 'PENDING_SCAN').reduce((s, b) => s + b.payoutAmountInr, 0)).inr}
+          </p>
+          <p className="text-[11px] text-slate-400 font-mono">
+            {formatDualCurrency(bags.filter(b => b.status === 'PENDING_SCAN').reduce((s, b) => s + b.payoutAmountInr, 0)).usdc}
+          </p>
         </div>
 
         <div className="glass-card p-4 space-y-1">

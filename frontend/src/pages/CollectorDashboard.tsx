@@ -107,8 +107,6 @@ export const CollectorDashboard: React.FC = () => {
 
   // Data & History
   const [harvests, setHarvests] = useState<HarvestItem[]>([]);
-  const [totalEarningsInr, setTotalEarningsInr] = useState(14880);
-  const [pendingPaymentInr, setPendingPaymentInr] = useState(2480);
 
   // Modals & Popups
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
@@ -475,8 +473,6 @@ export const CollectorDashboard: React.FC = () => {
       batchId: 'BATCH-88219',
       txHash: '0x9b4c7...d82a'
     });
-    setTotalEarningsInr(prev => prev + 1240);
-    setPendingPaymentInr(prev => Math.max(0, prev - 1240));
   };
 
   const renderSessionBanner = () => {
@@ -749,20 +745,28 @@ export const CollectorDashboard: React.FC = () => {
           <div className="grid grid-cols-3 gap-2.5">
             <div className="glass-card p-3 text-center space-y-1">
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Harvests</p>
-              <p className="text-xl font-extrabold text-white">{harvests.length + 3}</p>
-              <span className="text-[10px] text-emerald-400">All Verified</span>
+              <p className="text-xl font-extrabold text-white">{harvests.length}</p>
+              <span className="text-[10px] text-emerald-400">On-Chain Logs</span>
             </div>
 
             <div className="glass-card p-3 text-center space-y-1">
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pending Pay</p>
-              <p className="text-lg font-extrabold text-amber-300">{formatDualCurrency(pendingPaymentInr).inr}</p>
-              <p className="text-[9px] text-slate-400 font-mono">{formatDualCurrency(pendingPaymentInr).usdc}</p>
+              <p className="text-lg font-extrabold text-amber-300">
+                {formatDualCurrency(harvests.filter(h => h.status === 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)).inr}
+              </p>
+              <p className="text-[9px] text-slate-400 font-mono">
+                {formatDualCurrency(harvests.filter(h => h.status === 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)).usdc}
+              </p>
             </div>
 
             <div className="glass-card p-3 text-center space-y-1">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">This Month</p>
-              <p className="text-lg font-extrabold text-emerald-400">{formatDualCurrency(totalEarningsInr).inr}</p>
-              <p className="text-[9px] text-slate-400 font-mono">{formatDualCurrency(totalEarningsInr).usdc}</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Earnings</p>
+              <p className="text-lg font-extrabold text-emerald-400">
+                {formatDualCurrency(harvests.filter(h => h.status !== 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)).inr}
+              </p>
+              <p className="text-[9px] text-slate-400 font-mono">
+                {formatDualCurrency(harvests.filter(h => h.status !== 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)).usdc}
+              </p>
             </div>
           </div>
 
@@ -1325,8 +1329,12 @@ export const CollectorDashboard: React.FC = () => {
           {/* Balance Card */}
           <Card className="p-6 text-center space-y-3">
             <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Available Balance</p>
-            <h2 className="text-4xl font-extrabold text-white">{formatDualCurrency(totalEarningsInr).inr}</h2>
-            <p className="text-xs font-mono text-slate-400">{formatDualCurrency(totalEarningsInr).usdc} (Auto-Converted from USDC)</p>
+            <h2 className="text-4xl font-extrabold text-white">
+              {formatDualCurrency(harvests.filter(h => h.status !== 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)).inr}
+            </h2>
+            <p className="text-xs font-mono text-slate-400">
+              {formatDualCurrency(harvests.filter(h => h.status !== 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)).usdc} (Available for instant UPI withdrawal)
+            </p>
 
             <Button onClick={() => setShowWithdrawModal(true)} className="w-full py-3 mt-2">
               🏦 Withdraw to Bank / UPI
@@ -1336,22 +1344,27 @@ export const CollectorDashboard: React.FC = () => {
           {/* Transaction History */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payout History</h4>
-            {[
-              { id: 'TX-901', date: 'Today, 02:14 PM', amount: 1240, from: 'Mandi Aggregator', hash: '0x3f8a...110e' },
-              { id: 'TX-900', date: '12 Aug 2026', amount: 4800, from: 'Brahmi Lot Payout', hash: '0x7e21...cc42' },
-              { id: 'TX-899', date: '04 Aug 2026', amount: 8840, from: 'Ashwagandha Payout', hash: '0x10bb...4f90' }
-            ].map(tx => (
-              <div key={tx.id} className="glass-card p-3.5 flex justify-between items-center">
-                <div>
-                  <h5 className="font-bold text-sm text-white">{tx.from}</h5>
-                  <p className="text-[11px] text-slate-400">{tx.date} • <span className="font-mono text-emerald-400">{tx.hash}</span></p>
-                </div>
-                <div className="text-right">
-                  <span className="font-bold text-emerald-400 text-sm">+{formatDualCurrency(tx.amount).inr}</span>
-                  <p className="text-[10px] text-slate-500 font-mono">{formatDualCurrency(tx.amount).usdc}</p>
-                </div>
+            {harvests.filter(h => h.status !== 'COLLECTED').length === 0 ? (
+              <div className="glass-card p-6 text-center text-slate-400 space-y-1">
+                <p className="text-sm font-semibold text-slate-300">No payouts received yet</p>
+                <p className="text-xs">Once your harvest bags are scanned and accepted by the mandi aggregator, instant UPI payouts will appear here.</p>
               </div>
-            ))}
+            ) : (
+              harvests.filter(h => h.status !== 'COLLECTED').map(h => (
+                <div key={h.id} className="glass-card p-3.5 flex justify-between items-center">
+                  <div>
+                    <h5 className="font-bold text-sm text-white">Mandi Aggregator Payout ({h.herbName})</h5>
+                    <p className="text-[11px] text-slate-400">
+                      {new Date(h.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} • <span className="font-mono text-emerald-400">{h.batchId}</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-bold text-emerald-400 text-sm">+{formatDualCurrency(h.quantityKg * 80).inr}</span>
+                    <p className="text-[10px] text-slate-500 font-mono">{formatDualCurrency(h.quantityKg * 80).usdc}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -1368,7 +1381,9 @@ export const CollectorDashboard: React.FC = () => {
             {withdrawSuccess ? (
               <div className="text-center py-4 space-y-3">
                 <div className="text-4xl">✅</div>
-                <h4 className="font-bold text-white">₹{totalEarningsInr} Sent via UPI</h4>
+                <h4 className="font-bold text-white">
+                  ₹{harvests.filter(h => h.status !== 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)} Sent via UPI
+                </h4>
                 <p className="text-xs text-slate-400">Off-ramp rail partner settlement completed in 4.2 seconds.</p>
                 <Button onClick={() => { setShowWithdrawModal(false); setWithdrawSuccess(false); }} className="w-full">
                   Done
@@ -1390,7 +1405,7 @@ export const CollectorDashboard: React.FC = () => {
                   <input
                     type="text"
                     disabled
-                    value={`₹${totalEarningsInr}`}
+                    value={formatDualCurrency(harvests.filter(h => h.status !== 'COLLECTED').reduce((s, h) => s + (h.quantityKg * 80), 0)).inr}
                     className="input-field text-sm font-bold text-emerald-400 bg-slate-900"
                   />
                 </div>
