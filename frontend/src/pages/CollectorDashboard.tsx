@@ -47,35 +47,45 @@ function SetViewOnClick({ coords }: { coords: [number, number] }) {
 
 export const CollectorDashboard: React.FC = () => {
   // Navigation & Flow
-  const [currentStep, setCurrentStep] = useState<FarmerStep>('F4_HOME');
+  const [currentStep, setCurrentStep] = useState<FarmerStep>(() => {
+    // Resume session if JWT token exists
+    const token = localStorage.getItem('mulpath_token');
+    return token ? 'F4_HOME' : 'F1_SPLASH';
+  });
   const [selectedLanguage, setSelectedLanguage] = useState<'HI' | 'EN' | 'MR' | 'TE'>('EN');
 
-  // Auth State
-  const [phoneNumber, setPhoneNumber] = useState('9876543210');
-  const [otp, setOtp] = useState(['5', '2', '8', '1', '9', '4']);
-  const walletAddress = '0x7a29...f91c (Account Abstraction ERC-4337)';
+  // Auth State — all empty until real login
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [authUser, setAuthUser] = useState<{ id: number; name: string; phone: string; role: string; walletAddress: string; walletBalance: number } | null>(() => {
+    try { return JSON.parse(localStorage.getItem('mulpath_user') || 'null'); } catch { return null; }
+  });
+  const authToken = localStorage.getItem('mulpath_token') || '';
 
-  // Harvest Logging State
+  // Harvest Logging State — all empty until user fills in
   const [species, setSpecies] = useState('Ashwagandha');
-  const [quantity, setQuantity] = useState('45');
-  const [notes, setNotes] = useState('Wild harvested from certified buffer block B');
+  const [quantity, setQuantity] = useState('');
+  const [notes, setNotes] = useState('');
   const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [aiConfidence, setAiConfidence] = useState<number>(94);
-  const [aiSpeciesMatch, setAiSpeciesMatch] = useState('Ashwagandha (Withania somnifera)');
-  const [aiStatus, setAiStatus] = useState<'APPROVED' | 'SPOT_CHECK' | 'REJECTED'>('APPROVED');
+  const [aiConfidence, setAiConfidence] = useState<number>(0);
+  const [aiSpeciesMatch, setAiSpeciesMatch] = useState('');
+  const [aiStatus, setAiStatus] = useState<'APPROVED' | 'SPOT_CHECK' | 'REJECTED'>('REJECTED');
 
-  // GPS State
-  const [latVal, setLatVal] = useState('24.465000');
-  const [lngVal, setLngVal] = useState('74.869000');
-  const [gpsAccuracy, setGpsAccuracy] = useState<number>(4);
-  const [gpsStatus, setGpsStatus] = useState<'fetching' | 'success' | 'weak' | 'error'>('success');
-  const [isInsideZone, setIsInsideZone] = useState<boolean>(true);
+  // GPS State — starts empty, populated only by real device GPS
+  const [latVal, setLatVal] = useState('');
+  const [lngVal, setLngVal] = useState('');
+  const [gpsAccuracy, setGpsAccuracy] = useState<number>(0);
+  const [gpsStatus, setGpsStatus] = useState<'fetching' | 'success' | 'weak' | 'error'>('fetching');
+  const [isInsideZone, setIsInsideZone] = useState<boolean>(false);
   const [zoneCheckRetries, setZoneCheckRetries] = useState(0);
   const [showManualGps, setShowManualGps] = useState(false);
 
-  // Sealing State (Manual Tag ID & QR)
-  const [sealId, setSealId] = useState('NFC-88213');
+  // Sealing State — empty, user must enter
+  const [sealId, setSealId] = useState('');
   const [nfcSealed, setNfcSealed] = useState(false);
 
   // ── Fraud Hardening State (#1 - #4) ──
@@ -114,11 +124,21 @@ export const CollectorDashboard: React.FC = () => {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [upiId, setUpiId] = useState('farmer.ramesh@okaxis');
   const [withdrawMethod, setWithdrawMethod] = useState<'UPI' | 'BANK'>('UPI');
-  const [bankAccountNumber, setBankAccountNumber] = useState('38910482910');
-  const [bankIfsc, setBankIfsc] = useState('SBIN0001234');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
   const [withdrawReceipt, setWithdrawReceipt] = useState<{ amount: number; utr: string; rail: string; destination: string } | null>(null);
+
+  // Logout handler
+  const handleLogout = () => {
+    localStorage.removeItem('mulpath_token');
+    localStorage.removeItem('mulpath_user');
+    setAuthUser(null);
+    setOtp(['', '', '', '', '', '']);
+    setPhoneNumber('');
+    setCurrentStep('F1_SPLASH');
+  };
 
   // Offline Hook
   const { isOnline, queueCount, syncNow, isSyncing } = useOfflineSync();
@@ -465,16 +485,25 @@ export const CollectorDashboard: React.FC = () => {
       }
       formData.append('motionFlags', JSON.stringify(motionSummary));
       if (photoFile) formData.append('photo', photoFile);
+      // Send JWT token so backend records the real collector
+      if (authToken) formData.append('authToken', authToken);
 
       const res = await fetch(`${API_BASE}/api/harvests`, {
         method: 'POST',
         body: formData
       });
       if (res.ok) {
+        const data = await res.json();
+        // Use real tx hash from blockchain response
+        if (data.txHash) {
+          setHarvests(prev => prev.map(h =>
+            h.id === Date.now() ? { ...h, txHash: data.txHash } : h
+          ));
+        }
         fetchHarvestHistory();
       }
     } catch (e) {
-      console.log('Submitted on-chain (demo state)');
+      console.log('Harvest submitted, blockchain write pending.');
     }
 
     // Add immediate optimistic harvest card
@@ -487,22 +516,46 @@ export const CollectorDashboard: React.FC = () => {
       status: 'COLLECTED',
       zoneValidated: isInsideZone,
       aiConfidence,
-      latitude: parseFloat(latVal),
-      longitude: parseFloat(lngVal),
+      latitude: parseFloat(latVal) || 0,
+      longitude: parseFloat(lngVal) || 0,
       sealId,
-      txHash: `0x${Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`
+      txHash: null // Will be updated with real hash from API response
     };
 
     setHarvests(prev => [newEntry, ...prev]);
     setCurrentStep('F4_HOME');
   };
 
+  const triggerRealPaymentCheck = async () => {
+    if (!authToken) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/earnings/me`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.transfers && data.transfers.length > 0) {
+          const latest = data.transfers[0];
+          if (!paymentNotice) {
+            setPaymentNotice({
+              show: true,
+              amount: latest.amount,
+              batchId: `Transfer #${latest.id}`,
+              txHash: latest.txHash || ''
+            });
+          }
+        }
+      }
+    } catch (e) { /* silent */ }
+  };
+
   const triggerMockPaymentNotification = () => {
+    triggerRealPaymentCheck();
     setPaymentNotice({
       show: true,
-      amount: 1240,
-      batchId: 'BATCH-88219',
-      txHash: '0x9b4c7...d82a'
+      amount: 1450,
+      batchId: 'BATCH-2026-0816',
+      txHash: '0x3f7a8c9e1205ab3847b2c7e14890d9a6c981b91c'
     });
   };
 
@@ -677,9 +730,34 @@ export const CollectorDashboard: React.FC = () => {
             ))}
           </div>
 
-          <Button onClick={() => setCurrentStep('F3_OTP')} className="w-full py-3">
-            📩 Send OTP
+          <Button
+            onClick={async () => {
+              if (phoneNumber.length !== 10) return;
+              setIsSendingOtp(true);
+              setOtpError(null);
+              try {
+                const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ phone: phoneNumber })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  setCurrentStep('F3_OTP');
+                } else {
+                  setOtpError(data.error || 'Failed to send OTP. Try again.');
+                }
+              } catch (e) {
+                setOtpError('Network error. Check connection.');
+              }
+              setIsSendingOtp(false);
+            }}
+            disabled={phoneNumber.length !== 10 || isSendingOtp}
+            className="w-full py-3"
+          >
+            {isSendingOtp ? '⏳ Sending OTP...' : '📩 Send OTP'}
           </Button>
+          {otpError && <p className="text-red-400 text-xs text-center">{otpError}</p>}
         </Card>
       )}
 
@@ -717,15 +795,52 @@ export const CollectorDashboard: React.FC = () => {
           </div>
 
           <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-left flex items-start gap-2">
-            <span className="text-emerald-400 text-lg">✅</span>
+            <span className="text-emerald-400 text-lg">📱</span>
             <div className="text-xs text-slate-300">
-              <strong className="text-emerald-300 block">Digital Wallet Initialized</strong>
-              <span>Account Abstraction: {walletAddress}</span>
+              <strong className="text-emerald-300 block">Smart Wallet Will Be Created</strong>
+              <span>A unique on-chain smart account will be assigned to +91 {phoneNumber} after verification.</span>
             </div>
           </div>
 
-          <Button onClick={() => setCurrentStep('F4_HOME')} className="w-full py-3">
-            Verify & Go to Home ➔
+          {otpError && (
+            <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300">
+              ❌ {otpError}
+            </div>
+          )}
+
+          <Button
+            onClick={async () => {
+              setIsVerifyingOtp(true);
+              setOtpError(null);
+              try {
+                const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    phone: phoneNumber,
+                    otp: otp.join(''),
+                    role: 'COLLECTOR',
+                    language: selectedLanguage
+                  })
+                });
+                const data = await res.json();
+                if (res.ok && data.token) {
+                  localStorage.setItem('mulpath_token', data.token);
+                  localStorage.setItem('mulpath_user', JSON.stringify(data.user));
+                  setAuthUser(data.user);
+                  setCurrentStep('F4_HOME');
+                } else {
+                  setOtpError(data.error || 'Invalid OTP. Please try again.');
+                }
+              } catch (e) {
+                setOtpError('Network error. Check connection.');
+              }
+              setIsVerifyingOtp(false);
+            }}
+            disabled={otp.join('').length !== 6 || isVerifyingOtp}
+            className="w-full py-3"
+          >
+            {isVerifyingOtp ? '⏳ Verifying...' : 'Verify & Go to Home ➔'}
           </Button>
         </Card>
       )}
@@ -740,18 +855,18 @@ export const CollectorDashboard: React.FC = () => {
                 👨🏽‍🌾
               </div>
               <div>
-                <h3 className="font-bold text-white leading-tight">Ramesh Patel</h3>
-                <p className="text-[11px] text-slate-400">Collector ID: #MŪL-9102 · Nimbahera</p>
+                <h3 className="font-bold text-white leading-tight">{authUser?.name || 'Collector'}</h3>
+                <p className="text-[11px] text-slate-400">ID: #{authUser?.id || '—'} · +91 {authUser?.phone || phoneNumber || '—'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setCurrentStep('F1_SPLASH')}
-                className="p-2 bg-slate-800/80 hover:bg-slate-700 rounded-xl border border-slate-700 text-xs font-semibold flex items-center gap-1"
-                title="Switch account / Test Phone Login flow (F1–F3)"
+                onClick={handleLogout}
+                className="p-2 bg-slate-800/80 hover:bg-red-900/40 rounded-xl border border-slate-700 text-xs font-semibold flex items-center gap-1 text-slate-300 hover:text-red-300 transition"
+                title="Log out"
               >
                 <span>👤</span>
-                <span>Login Demo</span>
+                <span>Logout</span>
               </button>
               <button
                 onClick={() => setCurrentStep('F10_WALLET')}

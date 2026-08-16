@@ -142,11 +142,11 @@ export const Home = () => {
         </div>
       </section>
 
-      {/* Demo Portal Navigation */}
+      {/* Stakeholder Portals */}
       <section id="portals" className="glass-card py-12 px-6 md:px-12 space-y-8">
         <div className="text-center space-y-2">
-          <h2 className="text-3xl font-extrabold text-white">Simulation Portals</h2>
-          <p className="text-slate-400 text-sm max-w-md mx-auto">Select a stakeholder dashboard from the menu at the top right to simulate transactions across the supply chain.</p>
+          <h2 className="text-3xl font-extrabold text-white">Stakeholder Portals</h2>
+          <p className="text-slate-400 text-sm max-w-md mx-auto">Select a stakeholder dashboard from the menu at the top right to access your role-specific supply chain portal.</p>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">

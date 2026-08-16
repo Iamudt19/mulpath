@@ -28,18 +28,35 @@ enum BatchStatus {
 
 model User {
   id            Int            @id @default(autoincrement())
-  email         String         @unique
-  passwordHash  String
-  name          String
+  phone         String?        @unique  // 10-digit Indian mobile, primary login
+  email         String?        @unique  // Optional, for manufacturers/labs
+  name          String         @default("Farmer")
   role          Role           @default(CONSUMER)
-  walletAddress String?        @unique // For blockchain interactions
+  walletAddress String?        @unique  // Smart wallet (ERC-4337)
+  walletBalance Float          @default(0)  // INR balance in smart account
+  language      String         @default("EN") // HI, MR, TE, EN
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
+  otpSessions      OtpSession[]
   collectedBatches HerbBatch[] @relation("CollectorRelation")
   labCertificates  TestCertificate[]
   receivedTransfers PriceTransfer[] @relation("RecipientRelation")
   sentTransfers     PriceTransfer[] @relation("SenderRelation")
+}
+
+model OtpSession {
+  id          Int      @id @default(autoincrement())
+  phone       String
+  otpCode     String   // 6-digit code (hashed in production)
+  expiresAt   DateTime
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([phone])
 }
 
 model HerbBatch {

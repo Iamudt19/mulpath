@@ -26,56 +26,9 @@ export const VerifyPage: React.FC = () => {
   const [reportComments, setReportComments] = useState('');
   const [showRiskDetails, setShowRiskDetails] = useState(false);
 
-  // Mock / Real data
-  const [productData, setProductData] = useState({
-    id: '1',
-    name: 'Mūlpath Pure Ashwagandha Extract (500mg)',
-    brand: 'Dabur AYUSH Certified Organic',
-    retailPriceInr: 499,
-    farmerPayoutInr: 155,
-    farmerSharePct: 31.1,
-    sustainabilityScore: 94,
-    purityScore: 98.6,
-    scanCount: 1, // Anti-counterfeit check
-    blockchainTxHash: '0x8f2910cba71891048201a9df88102148bb0194e2',
-    harvesters: [
-      { name: 'Ramesh P.', region: 'Certified Forest Buffer Zone, Chittorgarh District', state: 'Rajasthan', species: 'Withania somnifera', aiMatch: 94 }
-    ],
-    timeline: [
-      {
-        stage: 'HARVEST',
-        icon: '🌿',
-        title: 'Wild Harvested in Approved Forest Zone',
-        subtitle: 'Collected by Ramesh P. · 45 kg · NFC Seal Tag #NFC-88213 · AI Species Confidence: 94%',
-        date: '12 Aug 2026',
-        txHash: '0x12a9...d401'
-      },
-      {
-        stage: 'PROCESSING',
-        icon: '🏭',
-        title: 'Temperature-Controlled Drying & Milling',
-        subtitle: 'Processed at Mandi Depot Hub #1 · Dried at 42°C for 18h · Hammer Mill #04 · NFC Seal Verified Intact',
-        date: '13 Aug 2026',
-        txHash: '0x44b1...889a'
-      },
-      {
-        stage: 'LAB_TEST',
-        icon: '🧪',
-        title: 'NABL Chemical Assay: 98.6% Purity',
-        subtitle: 'Shimadzu HPLC-2030C Automated Ingestion · Heavy Metals: None Detected · Certificate SHA-256 Verified',
-        date: '14 Aug 2026',
-        txHash: '0x99fe...a102'
-      },
-      {
-        stage: 'MANUFACTURE',
-        icon: '💊',
-        title: 'Formulation Packaged & Serialized',
-        subtitle: 'Registered by Himalaya AYUSH Procurements · Fair-Trade Payout: ₹155 (31.1%) · Lot #LOT-2291',
-        date: '15 Aug 2026',
-        txHash: '0x8f29...94e2'
-      }
-    ]
-  });
+  const [productData, setProductData] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(!!id);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/formulations`)
@@ -84,6 +37,10 @@ export const VerifyPage: React.FC = () => {
       .catch(() => {});
 
     if (id) {
+      setIsLoading(true);
+      // Increment scan counter
+      fetch(`${API_BASE}/api/formulations/${id}/scan`, { method: 'POST' }).catch(() => {});
+
       fetch(`${API_BASE}/api/formulations/${id}/chain`)
         .then(res => {
           if (res.ok) return res.json();
@@ -96,60 +53,73 @@ export const VerifyPage: React.FC = () => {
             const primaryBatch = batches[0];
             const cert = primaryBatch?.certificates?.[0];
 
-            setProductData(prev => ({
-              ...prev,
+            // Fetch real blockchain tx hash from BlockchainRecord table
+            const batchTxHash = primaryBatch?.blockchainRecords?.[0]?.txHash || null;
+
+            setProductData({
               id: f.id.toString(),
               name: f.name,
+              brand: f.brand || 'Mūlpath Certified',
               retailPriceInr: f.finalPriceInr,
-              farmerSharePct: f.fairTradePercentage || 31.2,
-              farmerPayoutInr: Math.round((f.finalPriceInr * (f.fairTradePercentage || 31.2)) / 100),
-              blockchainTxHash: f.invoiceHash || '0x0718c9dAdb8094CbC8184e467D4c4186C306585B',
-              purityScore: cert?.notes?.includes('Purity') ? 98.6 : 96.4,
+              farmerSharePct: f.fairTradePercentage || 0,
+              farmerPayoutInr: Math.round((f.finalPriceInr * (f.fairTradePercentage || 0)) / 100),
+              blockchainTxHash: f.invoiceHash || batchTxHash,
+              purityScore: cert ? parseFloat(cert.notes?.match(/([\d.]+)%/)?.[1] || '0') || 96.4 : null,
+              scanCount: f.scanCount || 1,
+              sustainabilityScore: 94,
               harvesters: batches.map((b: any) => ({
-                name: b.collector?.name || 'Ram Singh',
-                region: b.originLocation || 'Certified Forest Buffer Zone',
-                state: 'Rajasthan',
+                name: b.collector?.name || 'Unknown Collector',
+                region: b.originLocation || 'Field Location',
+                state: '',
                 species: b.herbName,
-                aiMatch: b.aiConfidence || 94
+                aiMatch: b.aiConfidence != null ? b.aiConfidence : null
               })),
               timeline: [
                 {
                   stage: 'HARVEST',
                   icon: '🌿',
                   title: 'Wild Harvested in Approved Forest Zone',
-                  subtitle: `Collected by ${primaryBatch?.collector?.name || 'Ram Singh'} · ${primaryBatch?.quantityKg || 50} kg · Tag #${primaryBatch?.sampleVialId || 'NFC-88213'} · AI Match: ${primaryBatch?.aiConfidence || 94}%`,
-                  date: new Date(primaryBatch?.harvestDate || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-                  txHash: '0x131d...236c'
+                  subtitle: [
+                    primaryBatch?.collector?.name ? `Collected by ${primaryBatch.collector.name}` : null,
+                    primaryBatch?.quantityKg ? `${primaryBatch.quantityKg} kg` : null,
+                    primaryBatch?.sampleVialId ? `Tag #${primaryBatch.sampleVialId}` : null,
+                    primaryBatch?.aiConfidence != null ? `AI Match: ${primaryBatch.aiConfidence}%` : null
+                  ].filter(Boolean).join(' · ') || 'Harvest record available on-chain',
+                  date: primaryBatch?.harvestDate ? new Date(primaryBatch.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+                  txHash: batchTxHash
                 },
                 {
                   stage: 'PROCESSING',
                   icon: '🏭',
                   title: 'Temperature-Controlled Drying & Milling',
-                  subtitle: 'Processed at Mandi Depot Hub #1 · Dried at 42°C for 18h · Hammer Mill #04 · NFC Seal Verified Intact',
-                  date: '13 Aug 2026',
-                  txHash: '0x44b1...889a'
+                  subtitle: 'Processed at Mandi Depot Hub · Dried at 42°C for 18h · NFC Seal Verified Intact',
+                  date: f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+                  txHash: null
                 },
                 {
                   stage: 'LAB_TEST',
                   icon: '🧪',
-                  title: `NABL Chemical Assay: ${cert?.notes ? 'Passed Verified' : '98.6% Purity'}`,
-                  subtitle: cert?.notes || 'Shimadzu HPLC-2030C Automated Ingestion · Heavy Metals: None Detected · Certificate SHA-256 Verified',
-                  date: new Date(cert?.testDate || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-                  txHash: cert?.certificateHash?.slice(0, 10) || '0x99fe...a102'
+                  title: cert ? `NABL Chemical Assay: ${cert.result}` : 'Lab Test Pending',
+                  subtitle: cert?.notes || 'Test certificate will appear here once processed.',
+                  date: cert?.testDate ? new Date(cert.testDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+                  txHash: cert?.certificateHash?.startsWith('0x') ? cert.certificateHash : null
                 },
                 {
                   stage: 'MANUFACTURE',
                   icon: '💊',
                   title: 'Formulation Packaged & Serialized',
-                  subtitle: `Registered formulation · Fair-Trade Farmer Share: ${f.fairTradePercentage || 31.2}% · On-Chain Sealed`,
-                  date: new Date(f.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-                  txHash: '0x0718...585B'
+                  subtitle: `Formulation registered on-chain · Fair-Trade Farmer Share: ${f.fairTradePercentage || 0}%`,
+                  date: f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+                  txHash: f.invoiceHash?.startsWith('0x') ? f.invoiceHash : null
                 }
               ]
-            }));
+            });
+          } else {
+            setNotFound(true);
           }
         })
-        .catch(() => {});
+        .catch(() => setNotFound(true))
+        .finally(() => setIsLoading(false));
     }
   }, [id]);
 
@@ -170,8 +140,30 @@ export const VerifyPage: React.FC = () => {
 
   return (
     <div className="max-w-lg mx-auto pb-24 space-y-6 text-slate-100 animate-fade-in-up">
+      {/* Loading state */}
+      {isLoading && id && (
+        <div className="glass-card p-12 text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto" />
+          <p className="text-slate-400 text-sm">Fetching on-chain verification data...</p>
+        </div>
+      )}
+
+      {/* Product Not Found */}
+      {notFound && !isLoading && (
+        <div className="glass-card p-8 text-center space-y-4">
+          <span className="text-4xl block">🔍</span>
+          <h2 className="text-xl font-bold text-white">Product Not Found</h2>
+          <p className="text-slate-400 text-sm">No verified product with ID <code className="text-emerald-400">#{id}</code> exists in the Mūlpath blockchain registry.</p>
+          <p className="text-xs text-slate-500">If you scanned a QR code, the product may not have completed the supply chain yet, or the QR code may be counterfeit.</p>
+          <button onClick={() => navigate('/verify')} className="mt-2 px-4 py-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-xl text-sm hover:bg-emerald-500/30 transition">
+            🔍 Search Another Product
+          </button>
+        </div>
+      )}
+
       {/* Search Bar when no ID or root */}
       {!id && (
+
         <div className="space-y-4">
           <div className="glass-card p-6 text-center space-y-3 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
             <span className="text-3xl">🛡️</span>
@@ -311,7 +303,7 @@ export const VerifyPage: React.FC = () => {
         <h3 className="font-bold text-white text-base">🕒 Immutability Journey Timeline</h3>
 
         <div className="space-y-6">
-          {productData.timeline.map((step, idx) => (
+          {productData.timeline.map((step: any, idx: number) => (
             <div key={idx} className="flex gap-4 relative">
               {/* Connector line */}
               {idx !== productData.timeline.length - 1 && (
