@@ -59,37 +59,7 @@ export const AggregatorDashboard: React.FC = () => {
 
   // Real Bags & Lots Data
   const [bags, setBags] = useState<IncomingBag[]>([]);
-  const [lots, setLots] = useState<LotItem[]>([
-    {
-      id: 'LOT-ASHWA-2291',
-      name: 'Ashwagandha Premium Whole Root (LOT-2291)',
-      species: 'Ashwagandha (Withania somnifera)',
-      originalWeightKg: 150,
-      processedWeightKg: 97.5,
-      createdAt: '2026-08-16',
-      sourceBagIds: ['BATCH-2026-0816', 'BATCH-2026-0815'],
-      labStatus: 'PENDING',
-      sampleVialId: 'VIAL-MUL-8492',
-      processingHistory: [
-        { dryingTemp: '42°C', dryingHours: '18 hrs', grindingMachineId: 'MILL-HAMMER-04', date: '2026-08-16' }
-      ]
-    },
-    {
-      id: 'LOT-TULSI-1094',
-      name: 'Organic Holy Tulsi Dried Leaf (LOT-1094)',
-      species: 'Tulsi (Ocimum tenuiflorum)',
-      originalWeightKg: 120,
-      processedWeightKg: 78.0,
-      createdAt: '2026-08-15',
-      sourceBagIds: ['BATCH-2026-0814', 'BATCH-2026-0813'],
-      labStatus: 'PASSED',
-      buyerName: 'Dabur Ayurvedic Division',
-      sampleVialId: 'VIAL-MUL-3918',
-      processingHistory: [
-        { dryingTemp: '38°C', dryingHours: '14 hrs', grindingMachineId: 'MILL-HAMMER-02', date: '2026-08-15' }
-      ]
-    }
-  ]);
+  const [lots, setLots] = useState<LotItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Escrow Pool State (Fiat On-Ramp)
@@ -900,9 +870,27 @@ export const AggregatorDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Lots Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {lots.map(l => (
+          {/* Lots Grid / Empty State */}
+          {lots.length === 0 ? (
+            <div className="glass-card p-12 text-center text-slate-400 space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-3xl mx-auto shadow-inner">
+                📦
+              </div>
+              <h4 className="text-base font-bold text-white">No Aggregated Lots in Hub Inventory</h4>
+              <p className="text-xs max-w-sm mx-auto text-slate-400">
+                When you accept harvest bags from collectors and merge them in the <strong>"Accepted Bags"</strong> tab, your aggregated lots will appear here ready for drying, milling, and NABL lab dispatch.
+              </p>
+              <Button
+                type="button"
+                onClick={() => setActiveTab('incoming')}
+                className="text-xs py-2 px-4 mt-2"
+              >
+                Scan Incoming Bags ➔
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lots.map(l => (
               <div 
                 key={l.id} 
                 className="glass-card p-5 space-y-3.5 border border-slate-800 hover:border-slate-700 transition"
@@ -1015,6 +1003,7 @@ export const AggregatorDashboard: React.FC = () => {
               </div>
             ))}
           </div>
+          )}
 
           {/* 🔍 Lot Lineage & Audit Modal */}
           {selectedLotDetail && (
