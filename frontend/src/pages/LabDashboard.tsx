@@ -105,9 +105,10 @@ export const LabDashboard: React.FC = () => {
     e.preventDefault();
     if (!selectedSample) return;
 
-    // Generate SHA-256 hash bound to Lot + Timestamp + Signing Key
+    // Initial temporary hash while waiting for on-chain submission
     const hash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
     setCertHash(hash);
+    setShowBlockchainModal(true);
 
     try {
       const formData = new FormData();
@@ -116,15 +117,19 @@ export const LabDashboard: React.FC = () => {
       formData.append('purityScore', purityScore);
       formData.append('notes', `HPLC Purity: ${purityScore}%, Active: ${activeCompounds}, Moisture: ${moistureContent}, Hash: ${hash}`);
 
-      await fetch(`${API_BASE}/api/test-reports`, {
+      const res = await fetch(`${API_BASE}/api/test-reports`, {
         method: 'POST',
         body: formData
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.txHash) {
+          setCertHash(data.txHash);
+        }
+      }
     } catch (err) {
       console.warn('Test report recorded locally');
     }
-
-    setShowBlockchainModal(true);
   };
 
   const handleBlockchainModalDone = () => {
@@ -466,8 +471,9 @@ export const LabDashboard: React.FC = () => {
       <BlockchainTxModal
         isOpen={showBlockchainModal}
         title="Anchoring Lab Certificate"
+        txHash={certHash || undefined}
         actionSummary="Generating SHA-256 digest bound to HPLC machine ID and anchoring to TestRegistry smart contract."
-        durationMs={6000}
+        durationMs={5000}
         onClose={handleBlockchainModalDone}
       />
     </div>

@@ -187,15 +187,19 @@ export const ManufacturerDashboard: React.FC = () => {
     }, 1500);
   };
 
+  const [mfgTxHash, setMfgTxHash] = useState<string>('');
+
   // Register Formulation
   const handleRegisterBatch = async (e: React.FormEvent) => {
     e.preventDefault();
     setBlockchainActionText(`Anchoring formulation batch "${productName}" with ${calculateFarmerShare()}% farmer fair-trade share.`);
+    setMfgTxHash('');
+    setShowBlockchainModal(true);
 
     try {
       // Send real creation request to backend
       const batchIds = selectedLotBlends.map(b => b.lotId.replace('LOT-', ''));
-      await fetch(`${API_BASE}/api/formulations`, {
+      const res = await fetch(`${API_BASE}/api/formulations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -204,11 +208,15 @@ export const ManufacturerDashboard: React.FC = () => {
           batchIds: batchIds.length > 0 ? batchIds : [1]
         })
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.txHash) {
+          setMfgTxHash(data.txHash);
+        }
+      }
     } catch (err) {
       console.warn('Formulation registered locally');
     }
-
-    setShowBlockchainModal(true);
   };
 
   const handleBlockchainModalDone = () => {
@@ -626,8 +634,9 @@ export const ManufacturerDashboard: React.FC = () => {
       <BlockchainTxModal
         isOpen={showBlockchainModal}
         title="Registering Formulation Batch"
+        txHash={mfgTxHash}
         actionSummary={blockchainActionText}
-        durationMs={6000}
+        durationMs={5000}
         onClose={handleBlockchainModalDone}
       />
     </div>

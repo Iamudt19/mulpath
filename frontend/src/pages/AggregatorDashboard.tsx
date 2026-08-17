@@ -11,6 +11,7 @@ interface IncomingBag {
   batchId: string;
   herbName: string;
   quantityKg: number;
+  collectorId: number;
   collectorName: string;
   collectorPhone: string;
   harvestDate: string;
@@ -91,6 +92,7 @@ export const AggregatorDashboard: React.FC = () => {
   const [grindingMachineId, setGrindingMachineId] = useState('MILL-HAMMER-04');
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
   const [blockchainActionText, setBlockchainActionText] = useState('');
+  const [processingTxHash, setProcessingTxHash] = useState<string>('');
   const [selectedLotDetail, setSelectedLotDetail] = useState<LotItem | null>(null);
 
   // Load real validated batches on mount
@@ -109,8 +111,9 @@ export const AggregatorDashboard: React.FC = () => {
           batchId: b.batchId,
           herbName: b.herbName,
           quantityKg: b.quantityKg,
-          collectorName: b.collector?.name || 'Ram Singh (Collector)',
-          collectorPhone: '+91 98765-43210',
+          collectorId: b.collector?.id || b.collectorId || 1,
+          collectorName: b.collector?.name || 'Collector',
+          collectorPhone: b.collector?.phone ? `+91 ${b.collector.phone}` : '+91 98765-43210',
           harvestDate: b.harvestDate,
           latitude: b.latitude || 24.465,
           longitude: b.longitude || 74.869,
@@ -178,16 +181,19 @@ export const AggregatorDashboard: React.FC = () => {
 
     setIsProcessingPayment(true);
     try {
-      // Record real price transfer in database
-      await fetch(`${API_BASE}/api/price-transfers`, {
+      // Record real price transfer in database with accurate collector recipient ID
+      const res = await fetch(`${API_BASE}/api/price-transfers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: scannedBag.payoutAmountInr,
-          recipientId: 1, // Collector
+          recipientId: scannedBag.collectorId || 1,
           herbBatchId: scannedBag.id
         })
       });
+      if (res.ok) {
+        console.log(`[PAYMENT] Payout of ₹${scannedBag.payoutAmountInr} sent to Collector #${scannedBag.collectorId}`);
+      }
     } catch (e) {
       console.warn('Payout record logged locally');
     }
@@ -198,6 +204,8 @@ export const AggregatorDashboard: React.FC = () => {
     setBags(prev => prev.map(b => b.id === scannedBag.id ? { ...b, status: 'ACCEPTED' } : b));
     setScannedBag(null);
     setTimeout(() => setPaymentSuccessToast(null), 5000);
+    // Refresh list from backend
+    fetchValidatedBatches();
   };
 
   const handleExecuteDeposit = async () => {
@@ -235,9 +243,13 @@ export const AggregatorDashboard: React.FC = () => {
   // Processing record submission
   const handleSaveProcessingRecord = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBlockchainActionText(`Anchoring drying (${dryingTemp}°C, ${dryingHours}h) & milling specs on-chain.`);
+    setProcessingTxHash('');
+    setShowBlockchainModal(true);
+
     if (selectedBatchForProcess) {
       try {
-        await fetch(`${API_BASE}/api/processing-events`, {
+        const res = await fetch(`${API_BASE}/api/processing-events`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -246,12 +258,16 @@ export const AggregatorDashboard: React.FC = () => {
             notes: `Drying: ${dryingTemp}°C for ${dryingHours}h. Mill: ${grindingMachineId}`
           })
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.txHash) {
+            setProcessingTxHash(data.txHash);
+          }
+        }
       } catch (err) {
-        console.warn('Processing event logged');
+        console.warn('Processing event logged locally');
       }
     }
-    setBlockchainActionText(`Anchoring drying (${dryingTemp}°C, ${dryingHours}h) & milling specs on-chain.`);
-    setShowBlockchainModal(true);
   };
 
   const handleBlockchainModalDone = () => {
@@ -996,8 +1012,9 @@ export const AggregatorDashboard: React.FC = () => {
       <BlockchainTxModal
         isOpen={showBlockchainModal}
         title="Recording Processing Parameters"
+        txHash={processingTxHash}
         actionSummary={blockchainActionText}
-        durationMs={6000}
+        durationMs={5000}
         onClose={handleBlockchainModalDone}
       />
     </div>
