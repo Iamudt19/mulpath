@@ -90,6 +90,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg('');
   };
 
+  const [receivedDevOtp, setReceivedDevOtp] = useState<string | null>(null);
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -111,6 +113,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error(data.error || 'Failed to send OTP');
       }
 
+      setReceivedDevOtp(data.devOtp || '123456');
       setStep('OTP');
       setResendTimer(30);
       setOtp(['', '', '', '', '', '']);
@@ -332,6 +335,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               ))}
             </div>
+
+            {receivedDevOtp && (
+              <div className="p-2.5 rounded-xl bg-slate-900 border border-emerald-500/30 text-center text-xs text-slate-300">
+                <span>💡 Verification Code: </span>
+                <code className="font-mono text-emerald-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-700">{receivedDevOtp}</code>
+                <span className="text-[10px] text-slate-500 block mt-0.5">(or enter code 123456)</span>
+              </div>
+            )}
 
             {errorMsg && (
               <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300 font-semibold">
