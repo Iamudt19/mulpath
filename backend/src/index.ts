@@ -17,7 +17,10 @@ const port = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'mulpath_jwt_secret_change_in_production';
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin or any frontend origin (Vercel, custom domain, local)
+    callback(null, true);
+  },
   credentials: true
 }));
 app.use(express.json());

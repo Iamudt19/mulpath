@@ -5,7 +5,7 @@ import { formatDualCurrency } from '../utils/currency';
 import { BlockchainTxModal } from '../components/BlockchainTxModal';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath-backend.onrender.com';
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
 
 interface MarketplaceLot {
   id: string;

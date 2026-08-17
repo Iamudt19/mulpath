@@ -15,7 +15,7 @@ export interface QueuedHarvest {
 }
 
 const STORAGE_KEY = 'mulpath_offline_harvests_queue';
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath-backend.onrender.com';
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
 
 export function getQueuedHarvests(): QueuedHarvest[] {
   try {

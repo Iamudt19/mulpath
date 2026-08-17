@@ -12,7 +12,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath-backend.onrender.com';
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
 
 export const VerifyPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

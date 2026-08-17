@@ -15,7 +15,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath-backend.onrender.com';
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
 
 type FarmerStep = 'F1_SPLASH' | 'F2_PHONE' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
 
