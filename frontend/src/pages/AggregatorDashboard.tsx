@@ -181,21 +181,20 @@ export const AggregatorDashboard: React.FC = () => {
 
     setIsProcessingPayment(true);
     try {
-      // Record real price transfer in database with accurate collector recipient ID
-      const res = await fetch(`${API_BASE}/api/price-transfers`, {
+      // Record acceptance and payout directly in database
+      const res = await fetch(`${API_BASE}/api/batches/${scannedBag.id}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: scannedBag.payoutAmountInr,
-          recipientId: scannedBag.collectorId || 1,
-          herbBatchId: scannedBag.id
+          recipientId: scannedBag.collectorId || 1
         })
       });
       if (res.ok) {
-        console.log(`[PAYMENT] Payout of ₹${scannedBag.payoutAmountInr} sent to Collector #${scannedBag.collectorId}`);
+        console.log(`[PAYMENT] Accepted batch #${scannedBag.id} and paid ₹${scannedBag.payoutAmountInr} to Collector #${scannedBag.collectorId}`);
       }
     } catch (e) {
-      console.warn('Payout record logged locally');
+      console.warn('Batch accepted locally');
     }
 
     setEscrowBalanceInr(prev => Math.max(0, prev - scannedBag.payoutAmountInr));

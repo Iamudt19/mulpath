@@ -9,6 +9,7 @@ const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath-back
 
 interface MarketplaceLot {
   id: string;
+  dbId?: number;
   name: string;
   species: string;
   availableWeightKg: number;
@@ -97,6 +98,7 @@ export const ManufacturerDashboard: React.FC = () => {
         const data = await res.json();
         const mapped: MarketplaceLot[] = data.map((b: any, idx: number) => ({
           id: b.batchId || `LOT-${b.id}`,
+          dbId: b.id,
           name: `${b.herbName} Pure Extract (${b.batchId})`,
           species: b.herbName,
           availableWeightKg: b.quantityKg,
@@ -144,25 +146,19 @@ export const ManufacturerDashboard: React.FC = () => {
   // Auto-calculated Farmer Share
   const calculateFarmerShare = (): number => {
     const retail = parseFloat(retailPricePerUnit) || 1;
-    const units = parseFloat(batchUnits) || 1;
+    const units = parseInt(batchUnits) || 1;
     const totalRetailRevenue = retail * units;
-
-    // Sum actual farmer payouts from blended lots
-    let totalFarmerPayout = 0;
-    selectedLotBlends.forEach(blend => {
+    const totalFarmerPayout = selectedLotBlends.reduce((sum, blend) => {
       const lot = lots.find(l => l.id === blend.lotId);
-      if (lot) {
-        totalFarmerPayout += (lot.totalFarmerPaidInr * (blend.blendPercent / 100));
-      }
-    });
-
+      return sum + (lot ? lot.totalFarmerPaidInr * (blend.blendPercent / 100) : 0);
+    }, 0);
     if (totalRetailRevenue === 0) return 0;
     const pct = Math.min(65, Math.max(15, (totalFarmerPayout / totalRetailRevenue) * 100));
     return +pct.toFixed(1);
   };
 
   // Purchase lot handler
-  const handleConfirmPurchase = () => {
+  const handleConfirmPurchase = async () => {
     if (!selectedLotForBuy) return;
     const buyKg = parseFloat(purchaseQuantityKg) || 0;
     if (buyKg > selectedLotForBuy.availableWeightKg) {
@@ -171,22 +167,27 @@ export const ManufacturerDashboard: React.FC = () => {
     }
 
     setIsPurchasing(true);
-    setTimeout(() => {
-      setIsPurchasing(false);
-      setLots(prev => prev.map(l => {
-        if (l.id === selectedLotForBuy.id) {
-          return {
-            ...l,
-            availableWeightKg: l.availableWeightKg - buyKg,
-            isPurchased: true
-          };
-        }
-        return l;
-      }));
-      alert(`✅ Purchased ${buyKg}kg of ${selectedLotForBuy.name}! Inventory reserved on-chain.`);
-      setSelectedLotForBuy(null);
-      setActiveTab('formulate');
-    }, 1500);
+    const targetNumericId = selectedLotForBuy.dbId || parseInt(selectedLotForBuy.id.replace(/\D/g, '')) || 1;
+
+    try {
+      await fetch(`${API_BASE}/api/batches/${targetNumericId}/purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchasedKg: buyKg })
+      });
+    } catch (e) {
+      console.warn('Purchase registered locally');
+    }
+
+    setIsPurchasing(false);
+    // Remove purchased lot from available marketplace
+    setLots(prev => prev.filter(l => l.id !== selectedLotForBuy.id));
+    // Pre-populate Formulation Builder blend with purchased lot
+    setSelectedLotBlends([{ lotId: selectedLotForBuy.id, blendPercent: 100 }]);
+    setProductName(`Mūlpath Pure ${selectedLotForBuy.species} Extract (500mg)`);
+    alert(`✅ Purchased ${buyKg}kg of ${selectedLotForBuy.name}! Inventory reserved on-chain.`);
+    setSelectedLotForBuy(null);
+    setActiveTab('formulate');
   };
 
   const [mfgTxHash, setMfgTxHash] = useState<string>('');

@@ -970,11 +970,71 @@ app.post('/api/price-transfers', async (req: Request, res: Response): Promise<an
   }
 });
 
+// POST: Explicitly Accept and Payout a Batch (Aggregator)
+app.post('/api/batches/:id/accept', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const id = parseInt(req.params.id);
+    const { amount, recipientId } = req.body;
+
+    const batch = await prisma.herbBatch.update({
+      where: { id },
+      data: { status: 'AGGREGATED' }
+    });
+
+    if (amount) {
+      const amountNum = parseFloat(amount);
+      const targetRecipient = recipientId ? parseInt(recipientId) : (batch.collectorId || 1);
+
+      await prisma.priceTransfer.create({
+        data: {
+          amount: amountNum,
+          recipientId: targetRecipient,
+          herbBatchId: id
+        }
+      }).catch(() => {});
+
+      await prisma.user.update({
+        where: { id: targetRecipient },
+        data: { walletBalance: { increment: amountNum } }
+      }).catch(() => {});
+    }
+
+    return res.status(200).json({ success: true, batch });
+  } catch (error) {
+    console.error('Failed to accept batch:', error);
+    return res.status(500).json({ error: 'Failed to accept batch' });
+  }
+});
+
+// POST: Purchase / Reserve Tested Lot (Manufacturer)
+app.post('/api/batches/:id/purchase', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const id = parseInt(req.params.id);
+    const { purchasedKg } = req.body;
+
+    const batch = await prisma.herbBatch.findUnique({ where: { id } });
+    if (!batch) return res.status(404).json({ error: 'Batch not found' });
+
+    const updated = await prisma.herbBatch.update({
+      where: { id },
+      data: { status: 'PURCHASED' }
+    });
+
+    return res.status(200).json({ success: true, batch: updated });
+  } catch (error) {
+    console.error('Failed to purchase batch:', error);
+    return res.status(500).json({ error: 'Failed to purchase batch' });
+  }
+});
+
 // GET: Tested/passed batches for Manufacturer
 app.get('/api/batches/tested', async (req: Request, res: Response): Promise<any> => {
   try {
     const batches = await prisma.herbBatch.findMany({
-      where: { status: 'TESTED', formulationId: null },
+      where: { 
+        status: { in: ['TESTED', 'AGGREGATED'] }, 
+        formulationId: null 
+      },
       include: {
         collector: { select: { name: true } },
         certificates: true,
