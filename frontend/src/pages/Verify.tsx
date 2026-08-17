@@ -30,62 +30,7 @@ export const VerifyPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(!!id);
   const [notFound, setNotFound] = useState(false);
 
-  // Demo fallback dataset for instant verification demonstration
-  const getDemoProduct = (productId: string) => ({
-    id: productId || '1',
-    name: 'Mūlpath Pure Ashwagandha Extract (500mg)',
-    brand: 'Mūlpath Certified Organic',
-    retailPriceInr: 499,
-    farmerSharePct: 18.2,
-    farmerPayoutInr: 91,
-    blockchainTxHash: '0x3a7b9c1d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b',
-    purityScore: 98.6,
-    scanCount: 1,
-    sustainabilityScore: 96,
-    harvesters: [
-      {
-        name: 'Ramesh Patel (Collector #1)',
-        region: 'Nimbahera Reserve Buffer Zone, Chittorgarh',
-        state: 'Rajasthan',
-        species: 'Ashwagandha (Withania somnifera)',
-        aiMatch: 95
-      }
-    ],
-    timeline: [
-      {
-        stage: 'HARVEST',
-        icon: '🌿',
-        title: 'Wild Harvested in Approved Forest Zone',
-        subtitle: 'Collected by Ramesh Patel · 50 kg · Tag #VIAL-MUL-8492 · PlantNet Match: 95%',
-        date: '17 Aug 2026',
-        txHash: '0x3a7b9c1d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b'
-      },
-      {
-        stage: 'PROCESSING',
-        icon: '🏭',
-        title: 'Temperature-Controlled Drying & Milling',
-        subtitle: 'Processed at Central Rajasthan Mandi Depot · Dried at 42°C for 18h · Hammer Mill #04',
-        date: '17 Aug 2026',
-        txHash: '0x8f2b37e190284c8e71fa84902194849102c91823746192837461928374619283'
-      },
-      {
-        stage: 'LAB_TEST',
-        icon: '🧪',
-        title: 'NABL HPLC Chemical Assay: PASSED',
-        subtitle: 'HPLC Purity: 98.6% · Withanolide A: 2.94% · Withaferin A: 1.72% · Zero heavy metals',
-        date: '17 Aug 2026',
-        txHash: '0x1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d'
-      },
-      {
-        stage: 'MANUFACTURE',
-        icon: '💊',
-        title: 'Formulation Packaged & Serialized',
-        subtitle: 'Formulation registered on-chain · Direct Farmer Fair-Trade Share: 18.2%',
-        date: '17 Aug 2026',
-        txHash: '0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b'
-      }
-    ]
-  });
+
 
   useEffect(() => {
     // Fetch all formulations for the quick selector
@@ -198,19 +143,21 @@ export const VerifyPage: React.FC = () => {
                 }
               ]
             });
+            setNotFound(false);
           } else {
-            // Use demo fallback
-            setProductData(getDemoProduct(id));
+            setNotFound(true);
+            setProductData(null);
           }
         })
         .catch(() => {
-          // Provide fallback demo view so the verification never breaks
-          setProductData(getDemoProduct(id));
+          setNotFound(true);
+          setProductData(null);
         })
         .finally(() => setIsLoading(false));
     } else {
       setIsLoading(false);
       setProductData(null);
+      setNotFound(false);
     }
   }, [id]);
 

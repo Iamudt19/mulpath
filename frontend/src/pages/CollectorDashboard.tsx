@@ -57,7 +57,7 @@ export const CollectorDashboard: React.FC = () => {
   // Auth State — all empty until real login
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [resendTimer, setResendTimer] = useState<number>(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -120,6 +120,13 @@ export const CollectorDashboard: React.FC = () => {
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [recentTransfers, setRecentTransfers] = useState<any[]>([]);
   const [autoSubmitToast, setAutoSubmitToast] = useState<string | null>(null);
+
+  // Targeted Aggregator Handoff State
+  const [assignedAggregatorId, setAssignedAggregatorId] = useState<string>('2');
+  const [aggregatorsList, setAggregatorsList] = useState<Array<{ id: number; name: string; phone?: string }>>([
+    { id: 2, name: 'Shakti Enterprises (Chittorgarh Mandi Depot)' },
+    { id: 3, name: 'Malwa Agro Processing Center (Neemuch Mandi)' }
+  ]);
 
   // Modals & Popups
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
@@ -221,12 +228,27 @@ export const CollectorDashboard: React.FC = () => {
     return () => window.removeEventListener('devicemotion', handleMotion);
   }, [currentStep]);
 
+  // Resend OTP countdown timer
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const interval = setInterval(() => {
+      setResendTimer(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendTimer]);
+
   // Initial load & periodic live sync
   useEffect(() => {
     fetchHarvestHistory();
+    triggerRealPaymentCheck();
+    fetch(`${API_BASE}/api/stakeholders/aggregators`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (Array.isArray(data) && data.length > 0) setAggregatorsList(data); })
+      .catch(() => {});
     const poller = setInterval(() => {
       if (currentStep === 'F4_HOME' || currentStep === 'F10_WALLET') {
         fetchHarvestHistory();
+        triggerRealPaymentCheck();
       }
     }, 4000);
     return () => clearInterval(poller);
@@ -605,6 +627,7 @@ export const CollectorDashboard: React.FC = () => {
       }
       formData.append('motionFlags', JSON.stringify(motionSummary));
       if (photoFile) formData.append('photo', photoFile);
+      if (assignedAggregatorId) formData.append('assignedAggregatorId', assignedAggregatorId);
       if (authToken) {
         formData.append('authToken', authToken);
       }
@@ -657,16 +680,6 @@ export const CollectorDashboard: React.FC = () => {
         }
       }
     } catch (e) { /* silent */ }
-  };
-
-  const triggerMockPaymentNotification = () => {
-    triggerRealPaymentCheck();
-    setPaymentNotice({
-      show: true,
-      amount: 1450,
-      batchId: 'BATCH-2026-0816',
-      txHash: '0x3f7a8c9e1205ab3847b2c7e14890d9a6c981b91c'
-    });
   };
 
   const renderSessionBanner = () => {
@@ -735,11 +748,8 @@ export const CollectorDashboard: React.FC = () => {
       {/* Screen F1 — Splash / Language Select */}
       {currentStep === 'F1_SPLASH' && (
         <Card className="text-center p-6 space-y-6">
-          <div className="flex justify-between items-center -mt-2 -mx-2">
-            <span className="text-xs font-mono text-emerald-400 font-bold uppercase">Language Setup</span>
-            <button onClick={() => setCurrentStep('F4_HOME')} className="text-xs text-slate-400 hover:text-white">
-              Skip to Dashboard ✕
-            </button>
+          <div className="flex justify-center items-center -mt-2">
+            <span className="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">Language Setup</span>
           </div>
 
           <div className="space-y-2">
@@ -781,12 +791,10 @@ export const CollectorDashboard: React.FC = () => {
       {currentStep === 'F2_PHONE' && (
         <Card className="p-6 space-y-5">
           <div className="flex justify-between items-center -mt-2 -mx-2">
-            <button onClick={() => setCurrentStep('F1_SPLASH')} className="text-xs text-slate-400 hover:text-white">
+            <button onClick={() => setCurrentStep('F1_SPLASH')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
               ⬅️ Back
             </button>
-            <button onClick={() => setCurrentStep('F4_HOME')} className="text-xs text-slate-400 hover:text-white">
-              Cancel ✕
-            </button>
+            <span className="text-[11px] text-emerald-400 font-mono font-semibold">Step 2 of 3</span>
           </div>
           <div className="text-center space-y-1">
             <h3 className="text-xl font-bold text-white">Collector Login</h3>
@@ -802,11 +810,12 @@ export const CollectorDashboard: React.FC = () => {
                 maxLength={10}
                 className="input-field text-lg font-bold tracking-widest text-white"
                 value={phoneNumber}
-                onChange={e => setPhoneNumber(e.target.value)}
+                onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                placeholder="9876543210"
               />
             </div>
             <p className="text-[11px] text-emerald-400 font-medium">
-              🔒 No password needed. No crypto wallet setup required.
+              🔒 A secure 6-digit OTP will be dispatched to your mobile.
             </p>
           </div>
 
@@ -833,7 +842,7 @@ export const CollectorDashboard: React.FC = () => {
               if (phoneNumber.length !== 10) return;
               setIsSendingOtp(true);
               setOtpError(null);
-              setDevOtp(null);
+              setOtp(['', '', '', '', '', '']);
               try {
                 const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
                   method: 'POST',
@@ -842,12 +851,7 @@ export const CollectorDashboard: React.FC = () => {
                 });
                 const data = await res.json();
                 if (res.ok) {
-                  // Dev mode: backend returns OTP directly (no SMS configured)
-                  if (data.devOtp) {
-                    setDevOtp(data.devOtp);
-                    // Auto-fill OTP boxes
-                    setOtp(data.devOtp.split(''));
-                  }
+                  setResendTimer(30);
                   setCurrentStep('F3_OTP');
                 } else {
                   setOtpError(data.error || 'Failed to send OTP. Try again.');
@@ -870,51 +874,99 @@ export const CollectorDashboard: React.FC = () => {
       {currentStep === 'F3_OTP' && (
         <Card className="p-6 space-y-5 text-center">
           <div className="flex justify-between items-center -mt-2 -mx-2">
-            <button onClick={() => setCurrentStep('F2_PHONE')} className="text-xs text-slate-400 hover:text-white">
-              ⬅️ Back
+            <button onClick={() => setCurrentStep('F2_PHONE')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+              ⬅️ Change Number
             </button>
-            <button onClick={() => setCurrentStep('F4_HOME')} className="text-xs text-slate-400 hover:text-white">
-              Cancel ✕
-            </button>
+            <span className="text-[11px] text-emerald-400 font-mono font-semibold">Step 3 of 3</span>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white">Enter 6-Digit OTP</h3>
-            <p className="text-xs text-slate-400 mt-1">Sent to +91 {phoneNumber}</p>
+            <h3 className="text-xl font-bold text-white">Enter 6-Digit Verification Code</h3>
+            <p className="text-xs text-slate-400 mt-1">Dispatched to <strong className="text-slate-200">+91 {phoneNumber}</strong></p>
           </div>
 
           <div className="flex justify-center gap-2">
             {otp.map((digit, idx) => (
               <input
                 key={idx}
+                id={`otp-box-${idx}`}
                 type="text"
+                inputMode="numeric"
                 maxLength={1}
                 value={digit}
                 onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '');
                   const newOtp = [...otp];
-                  newOtp[idx] = e.target.value;
+                  newOtp[idx] = val ? val.slice(-1) : '';
                   setOtp(newOtp);
+                  if (val && idx < 5) {
+                    const nextInput = document.getElementById(`otp-box-${idx + 1}`);
+                    nextInput?.focus();
+                  }
                 }}
-                className="w-11 h-12 text-center text-xl font-bold rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-emerald-400 focus:outline-none"
+                onKeyDown={e => {
+                  if (e.key === 'Backspace' && !otp[idx] && idx > 0) {
+                    const prevInput = document.getElementById(`otp-box-${idx - 1}`);
+                    prevInput?.focus();
+                  }
+                }}
+                onPaste={e => {
+                  e.preventDefault();
+                  const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+                  if (pasted) {
+                    const newOtp = [...otp];
+                    for (let i = 0; i < 6; i++) {
+                      newOtp[i] = pasted[i] || '';
+                    }
+                    setOtp(newOtp);
+                  }
+                }}
+                className="w-11 h-12 text-center text-xl font-bold rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-emerald-400 focus:outline-none transition"
               />
             ))}
+          </div>
+
+          <div className="flex justify-between items-center text-xs px-2">
+            <span className="text-slate-400">Didn't receive code?</span>
+            {resendTimer > 0 ? (
+              <span className="text-slate-500 font-mono">Resend in {resendTimer}s</span>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsSendingOtp(true);
+                  setOtpError(null);
+                  try {
+                    const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ phone: phoneNumber })
+                    });
+                    if (res.ok) {
+                      setResendTimer(30);
+                    } else {
+                      const data = await res.json();
+                      setOtpError(data.error || 'Failed to resend code');
+                    }
+                  } catch {
+                    setOtpError('Network error resending code');
+                  }
+                  setIsSendingOtp(false);
+                }}
+                disabled={isSendingOtp}
+                className="text-emerald-400 hover:underline font-semibold"
+              >
+                {isSendingOtp ? 'Sending...' : 'Resend Code'}
+              </button>
+            )}
           </div>
 
           <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-left flex items-start gap-2">
             <span className="text-emerald-400 text-lg">📱</span>
             <div className="text-xs text-slate-300">
-              <strong className="text-emerald-300 block">Smart Wallet Will Be Created</strong>
-              <span>A unique on-chain smart account will be assigned to +91 {phoneNumber} after verification.</span>
+              <strong className="text-emerald-300 block">Smart Wallet Auto-Provisioned</strong>
+              <span>A unique ERC-4337 smart wallet account is linked to +91 {phoneNumber} on verification.</span>
             </div>
           </div>
-
-          {/* Dev Mode OTP Banner */}
-          {devOtp && (
-            <div className="p-3 bg-amber-950/50 border border-amber-500/40 rounded-xl text-center">
-              <p className="text-[11px] text-amber-400 font-semibold">⚠️ Dev Mode — SMS not configured</p>
-              <p className="text-amber-200 font-mono text-2xl font-bold tracking-widest mt-1">{devOtp}</p>
-              <p className="text-[10px] text-amber-500 mt-1">OTP auto-filled ↑ — just click Verify</p>
-            </div>
-          )}
 
           {otpError && (
             <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300">
@@ -944,7 +996,7 @@ export const CollectorDashboard: React.FC = () => {
                   setAuthUser(data.user);
                   setCurrentStep('F4_HOME');
                 } else {
-                  setOtpError(data.error || 'Invalid OTP. Please try again.');
+                  setOtpError(data.error || 'Invalid OTP code. Please enter the correct 6 digits.');
                 }
               } catch (e) {
                 setOtpError('Network error. Check connection.');
@@ -954,7 +1006,7 @@ export const CollectorDashboard: React.FC = () => {
             disabled={otp.join('').length !== 6 || isVerifyingOtp}
             className="w-full py-3"
           >
-            {isVerifyingOtp ? '⏳ Verifying...' : 'Verify & Go to Home ➔'}
+            {isVerifyingOtp ? '⏳ Verifying Code...' : 'Verify & Access Dashboard ➔'}
           </Button>
         </Card>
       )}
@@ -1030,15 +1082,10 @@ export const CollectorDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Demo Trigger for Screen F9 Payment Notice */}
+          {/* Recent Harvest Logs Header */}
           <div className="flex justify-between items-center px-1">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recent Harvest Logs</span>
-            <button
-              onClick={triggerMockPaymentNotification}
-              className="text-[11px] text-emerald-400 font-semibold hover:underline flex items-center gap-1"
-            >
-              ⚡ Test Payout Notification (F9)
-            </button>
+            <span className="text-[11px] text-emerald-400 font-semibold">{harvests.length} Batches Recorded</span>
           </div>
 
           {/* Harvest List */}
@@ -1478,6 +1525,28 @@ export const CollectorDashboard: React.FC = () => {
               </div>
               <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded font-bold">READY TO SEAL</span>
             </div>
+          </div>
+
+          {/* Targeted Destination Aggregator Selection */}
+          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🏭</span>
+              <div>
+                <label className="input-label text-slate-200 font-bold mb-0">Destination Mandi / Aggregator Depot</label>
+                <p className="text-[10px] text-slate-400">Only the selected Mandi center will receive and process your bag.</p>
+              </div>
+            </div>
+            <select
+              value={assignedAggregatorId}
+              onChange={e => setAssignedAggregatorId(e.target.value)}
+              className="input-field text-xs font-semibold"
+            >
+              {aggregatorsList.map(a => (
+                <option key={a.id} value={a.id.toString()}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-1">

@@ -580,24 +580,38 @@ export const ManufacturerDashboard: React.FC = () => {
               const targetId = latestRegisteredBatch.dbId || createdDbId || 1;
               const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mulpath.vercel.app';
               const verifyUrl = `${originUrl}/verify/${targetId}?serial=${serial}`;
-              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verifyUrl)}`;
+              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent(verifyUrl)}`;
 
               return (
-                <div key={idx} className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl text-center space-y-2">
-                  <div className="w-24 h-24 mx-auto bg-white p-1.5 rounded-lg flex items-center justify-center">
+                <div key={idx} className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl text-center space-y-3 shadow-lg">
+                  <div className="w-28 h-28 mx-auto bg-white p-2 rounded-xl flex items-center justify-center shadow-md">
                     <img
                       src={qrSrc}
-                      alt="QR"
-                      className="w-full h-full"
+                      alt="Scannable QR"
+                      className="w-full h-full object-contain"
                     />
                   </div>
-                  <p className="text-[10px] font-mono text-slate-300 font-bold truncate">#{serial}</p>
-                  <button
-                    onClick={() => navigate(`/verify/${targetId}`)}
-                    className="text-[10px] text-emerald-400 hover:underline font-semibold block mx-auto"
-                  >
-                    Test Consumer View ↗
-                  </button>
+                  <div>
+                    <p className="text-[11px] font-mono text-emerald-400 font-bold truncate">#{serial}</p>
+                    <p className="text-[9px] text-slate-400 truncate mt-0.5">{verifyUrl}</p>
+                  </div>
+                  <div className="flex justify-center gap-2 pt-1">
+                    <a
+                      href={qrSrc}
+                      download={`QR-${serial}.png`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] py-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 font-semibold"
+                    >
+                      📥 Save QR
+                    </a>
+                    <button
+                      onClick={() => navigate(`/verify/${targetId}`)}
+                      className="text-[10px] py-1 px-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg border border-emerald-500/40 font-semibold"
+                    >
+                      Audit ↗
+                    </button>
+                  </div>
                 </div>
               );
             })}

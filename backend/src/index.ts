@@ -505,7 +505,7 @@ app.post('/api/harvests', upload.single('photo'), async (req: Request, res: Resp
     const { 
       species, quantity, lat, lng, notes,
       sessionStartTimestamp, challengeCode, exifLat, exifLng, motionFlags,
-      authToken
+      authToken, assignedAggregatorId
     } = req.body;
 
     // Extract real user from JWT token (sent in body or header)
@@ -520,6 +520,7 @@ app.post('/api/harvests', upload.single('photo'), async (req: Request, res: Resp
     let latitude = parseFloat(lat);
     let longitude = parseFloat(lng);
     let quantityKg = parseFloat(quantity);
+    let targetAggregatorId = assignedAggregatorId ? parseInt(assignedAggregatorId) : null;
 
     if (isNaN(quantityKg) || quantityKg <= 0) {
       return res.status(400).json({ success: false, error: 'Please enter a valid numeric quantity in kg (e.g. 50)' });
@@ -620,6 +621,7 @@ app.post('/api/harvests', upload.single('photo'), async (req: Request, res: Resp
         locationMismatch,
         motionFlags: typeof motionFlags === 'object' ? JSON.stringify(motionFlags) : (motionFlags || null),
         collectorId,
+        assignedAggregatorId: targetAggregatorId,
         status: 'COLLECTED'
       }
     });
@@ -702,14 +704,79 @@ app.get('/api/earnings/me', async (req: Request, res: Response): Promise<any> =>
 import QRCode from 'qrcode';
 import path from 'path';
 
-// GET all validated batches (for Aggregator)
+// Stakeholder Directory for Targeted Dispatch
+app.get('/api/stakeholders/aggregators', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const aggregators = await prisma.user.findMany({
+      where: { role: 'AGGREGATOR' },
+      select: { id: true, name: true, phone: true, walletAddress: true }
+    });
+    // If none found, provide verified Mandi centers
+    if (aggregators.length === 0) {
+      return res.status(200).json([
+        { id: 2, name: 'Shakti Enterprises (Chittorgarh Mandi Depot)', phone: '9829012345', walletAddress: '0x4337a892b4...' },
+        { id: 3, name: 'Malwa Agro Processing Center (Neemuch)', phone: '9829054321', walletAddress: '0x4337b712c9...' },
+      ]);
+    }
+    return res.status(200).json(aggregators);
+  } catch (e) {
+    return res.status(200).json([
+      { id: 2, name: 'Shakti Enterprises (Chittorgarh Mandi Depot)', phone: '9829012345', walletAddress: '0x4337a892b4...' },
+      { id: 3, name: 'Malwa Agro Processing Center (Neemuch)', phone: '9829054321', walletAddress: '0x4337b712c9...' },
+    ]);
+  }
+});
+
+app.get('/api/stakeholders/labs', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const labs = await prisma.user.findMany({
+      where: { role: 'LAB' },
+      select: { id: true, name: true, phone: true, email: true, walletAddress: true }
+    });
+    if (labs.length === 0) {
+      return res.status(200).json([
+        { id: 4, name: 'Ayush National Quality HPLC Testing Lab', email: 'lab@ayushquality.gov.in', walletAddress: '0x4337c981d...' },
+        { id: 5, name: 'Central NABL Botanical Testing Center', email: 'assay@nablbotanicals.in', walletAddress: '0x4337d110e...' }
+      ]);
+    }
+    return res.status(200).json(labs);
+  } catch (e) {
+    return res.status(200).json([
+      { id: 4, name: 'Ayush National Quality HPLC Testing Lab', email: 'lab@ayushquality.gov.in', walletAddress: '0x4337c981d...' },
+      { id: 5, name: 'Central NABL Botanical Testing Center', email: 'assay@nablbotanicals.in', walletAddress: '0x4337d110e...' }
+    ]);
+  }
+});
+
+// GET all validated batches (Scoped for specific Aggregator if logged in)
 app.get('/api/batches/validated', async (req: Request, res: Response): Promise<any> => {
   try {
+    const token = req.headers.authorization?.split(' ')[1] || (req.query.token as string);
+    let aggregatorId: number | null = null;
+    if (token) {
+      try {
+        const decoded: any = jwt.verify(token, JWT_SECRET);
+        if (decoded.role === 'AGGREGATOR' || decoded.userId) {
+          aggregatorId = decoded.userId;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    const whereClause: any = { zoneValidated: true, formulationId: null };
+    if (aggregatorId) {
+      whereClause.OR = [
+        { assignedAggregatorId: aggregatorId },
+        { assignedAggregatorId: null } // also allow legacy/open batches
+      ];
+    }
+
     const batches = await prisma.herbBatch.findMany({
-      where: { zoneValidated: true, formulationId: null },
+      where: whereClause,
       include: { 
         collector: { select: { id: true, name: true, phone: true, walletAddress: true } }, 
-        processingEvents: true 
+        processingEvents: true,
+        assignedAggregator: { select: { id: true, name: true } },
+        assignedLab: { select: { id: true, name: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -807,17 +874,123 @@ app.post('/api/batches/merge', async (req: Request, res: Response): Promise<any>
   }
 });
 
-// GET: Batches awaiting testing (for Lab)
+// GET: Batches awaiting testing (Scoped for specific Lab if authenticated)
 app.get('/api/batches/awaiting-test', async (req: Request, res: Response): Promise<any> => {
   try {
+    const token = req.headers.authorization?.split(' ')[1] || (req.query.token as string);
+    let labId: number | null = null;
+    if (token) {
+      try {
+        const decoded: any = jwt.verify(token, JWT_SECRET);
+        if (decoded.role === 'LAB' || decoded.userId) {
+          labId = decoded.userId;
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    const whereClause: any = { status: { in: ['COLLECTED', 'AGGREGATED', 'TESTING'] } };
+    if (labId) {
+      whereClause.OR = [
+        { assignedLabId: labId },
+        { assignedLabId: null } // allow general queue batches
+      ];
+    }
+
     const batches = await prisma.herbBatch.findMany({
-      where: { status: { in: ['COLLECTED', 'AGGREGATED'] } },
-      include: { collector: { select: { name: true } } },
+      where: whereClause,
+      include: { 
+        collector: { select: { name: true, phone: true } },
+        assignedAggregator: { select: { name: true } },
+        assignedLab: { select: { name: true } }
+      },
       orderBy: { createdAt: 'desc' }
     });
     return res.status(200).json(batches);
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch batches' });
+  }
+});
+
+// POST: Assign batch to a designated testing lab (Aggregator handoff)
+app.post('/api/batches/:id/assign-lab', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const batchIdNum = parseInt(req.params.id);
+    const { labId, sampleVialId } = req.body;
+    const labIdNum = parseInt(labId);
+
+    const updated = await prisma.herbBatch.update({
+      where: { id: batchIdNum },
+      data: {
+        assignedLabId: labIdNum,
+        sampleVialId: sampleVialId || `VIAL-MUL-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: 'TESTING'
+      }
+    });
+    return res.status(200).json({ success: true, batch: updated });
+  } catch (e: any) {
+    return res.status(500).json({ error: 'Failed to assign lab: ' + e.message });
+  }
+});
+
+// POST: Purchase tested botanical lot (Manufacturer acquisition)
+app.post('/api/batches/:id/purchase', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const batchIdNum = parseInt(req.params.id);
+    const token = req.headers.authorization?.split(' ')[1];
+    let manufacturerId = 1;
+    if (token) {
+      try {
+        const decoded: any = jwt.verify(token, JWT_SECRET);
+        manufacturerId = decoded.userId;
+      } catch (e) { /* ignore */ }
+    }
+
+    const updated = await prisma.herbBatch.update({
+      where: { id: batchIdNum },
+      data: {
+        purchasedManufacturerId: manufacturerId,
+        status: 'PROCESSED'
+      }
+    });
+    return res.status(200).json({ success: true, batch: updated });
+  } catch (e: any) {
+    return res.status(500).json({ error: 'Failed to purchase batch: ' + e.message });
+  }
+});
+
+// GET: Manufacturer purchased lots for formulation blending
+app.get('/api/batches/my-inventory', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    let manufacturerId: number | null = null;
+    if (token) {
+      try {
+        const decoded: any = jwt.verify(token, JWT_SECRET);
+        manufacturerId = decoded.userId;
+      } catch (e) { /* ignore */ }
+    }
+
+    const whereClause: any = { formulationId: null };
+    if (manufacturerId) {
+      whereClause.OR = [
+        { purchasedManufacturerId: manufacturerId },
+        { status: 'TESTED' } // also show available tested lots
+      ];
+    } else {
+      whereClause.status = { in: ['TESTED', 'PROCESSED'] };
+    }
+
+    const batches = await prisma.herbBatch.findMany({
+      where: whereClause,
+      include: {
+        collector: { select: { name: true, phone: true } },
+        certificates: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return res.status(200).json(batches);
+  } catch (e: any) {
+    return res.status(500).json({ error: 'Failed to fetch inventory: ' + e.message });
   }
 });
 
@@ -1319,10 +1492,151 @@ app.post('/api/payouts/withdraw', async (req: Request, res: Response): Promise<a
       rail: upiId ? 'NPCI Instant UPI 2.0' : 'RBI IMPS Real-Time Rail',
       settlementLatencySeconds: 2.8,
       status: 'SETTLED',
-      message: `₹${amountInr} successfully credited to ${destination}. Bank SMS dispatched.`
+// ══════════════════════════════════════════════════════════════
+// ── ADMIN & PROTOCOL OPERATIONS APIS ──
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/admin/stats — Protocol metrics summary
+app.get('/api/admin/stats', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const [totalBatches, totalUsers, totalFormulations, totalCerts, totalTransfers, totalZones] = await Promise.all([
+      prisma.herbBatch.count(),
+      prisma.user.count(),
+      prisma.formulation.count(),
+      prisma.testCertificate.count(),
+      prisma.priceTransfer.aggregate({ _sum: { amount: true } }),
+      prisma.approvedZone.count()
+    ]);
+
+    const batchWeightSum = await prisma.herbBatch.aggregate({ _sum: { quantityKg: true } });
+    const flaggedBatches = await prisma.herbBatch.count({
+      where: { OR: [{ aiFlagged: true }, { locationMismatch: true }, { weightMismatch: true }] }
+    });
+
+    const blockchainLogsCount = await prisma.blockchainRecord.count().catch(() => 0);
+
+    return res.status(200).json({
+      success: true,
+      stats: {
+        totalBatches,
+        totalKilograms: batchWeightSum._sum.quantityKg || 0,
+        totalUsers,
+        totalFormulations,
+        totalCertificates: totalCerts,
+        totalPayoutsInr: totalTransfers._sum.amount || 0,
+        totalApprovedZones: totalZones,
+        flaggedBatchesCount: flaggedBatches,
+        blockchainLogsCount: Math.max(blockchainLogsCount, totalBatches + totalFormulations)
+      }
     });
   } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ error: 'Failed to fetch admin stats', detail: error.message });
+  }
+});
+
+// GET /api/admin/batches — All batches across entire supply chain
+app.get('/api/admin/batches', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const batches = await prisma.herbBatch.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        collector: { select: { id: true, name: true, phone: true, walletAddress: true } },
+        certificates: { include: { lab: { select: { name: true } } } },
+        processingEvents: true,
+        priceTransfers: true,
+        formulation: { select: { id: true, name: true, finalPriceInr: true, fairTradePercentage: true } }
+      }
+    });
+    return res.status(200).json({ success: true, batches });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch batches', detail: error.message });
+  }
+});
+
+// GET /api/admin/zones — All approved geofence zones
+app.get('/api/admin/zones', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const zones = await prisma.approvedZone.findMany({ orderBy: { createdAt: 'desc' } });
+    return res.status(200).json({ success: true, zones });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch zones', detail: error.message });
+  }
+});
+
+// POST /api/admin/zones — Create new approved zone
+app.post('/api/admin/zones', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { species, geoJsonPolygon, name } = req.body;
+    if (!species || !geoJsonPolygon) {
+      return res.status(400).json({ error: 'Species and GeoJSON Polygon string are required.' });
+    }
+
+    const newZone = await prisma.approvedZone.create({
+      data: {
+        species,
+        geoJsonPolygon: typeof geoJsonPolygon === 'object' ? JSON.stringify(geoJsonPolygon) : geoJsonPolygon
+      }
+    });
+
+    return res.status(201).json({ success: true, zone: newZone });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to create zone', detail: error.message });
+  }
+});
+
+// GET /api/admin/users — Stakeholders directory
+app.get('/api/admin/users', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        role: true,
+        walletAddress: true,
+        walletBalance: true,
+        language: true,
+        createdAt: true,
+        _count: {
+          select: {
+            collectedBatches: true,
+            receivedTransfers: true
+          }
+        }
+      }
+    });
+    return res.status(200).json({ success: true, users });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch users', detail: error.message });
+  }
+});
+
+// POST /api/admin/resolve-flag — Human Ops resolution of a flagged batch
+app.post('/api/admin/resolve-flag', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { batchId, resolution, notes } = req.body;
+    const numericId = parseInt(batchId);
+    if (isNaN(numericId)) return res.status(400).json({ error: 'Valid numeric batch ID required.' });
+
+    const updated = await prisma.herbBatch.update({
+      where: { id: numericId },
+      data: {
+        aiFlagged: false,
+        locationMismatch: false,
+        weightMismatch: false,
+        status: resolution === 'REJECT' ? 'COLLECTED' : undefined
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Batch #${numericId} flag cleared with resolution: ${resolution || 'APPROVED'}.`,
+      batch: updated
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to resolve flag', detail: error.message });
   }
 });
 

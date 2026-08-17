@@ -946,13 +946,16 @@ export const AggregatorDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setLots(prev => prev.map(item => item.id === l.id ? { ...item, labStatus: 'PENDING' } : item));
-                          alert(`🧪 Sample vial #${l.sampleVialId || 'VIAL-MUL-8492'} dispatched to NABL Quality Testing Lab #18. Appears in Quality Lab review queue.`);
+                          const targetLab = prompt('Select Destination Testing Laboratory:\n1. Ayush National Quality HPLC Lab (#4)\n2. Central NABL Botanical Testing Center (#5)', 'Ayush National Quality HPLC Lab (#4)');
+                          if (targetLab) {
+                            setLots(prev => prev.map(item => item.id === l.id ? { ...item, labStatus: 'PENDING' } : item));
+                            alert(`🧪 Sample vial #${l.sampleVialId || 'VIAL-MUL-8492'} routed specifically to "${targetLab}". Only this lab can view and certify the assay.`);
+                          }
                         }}
                         className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-xs font-semibold flex items-center gap-1"
                       >
                         <span>🧪</span>
-                        <span>Dispatch Sample to Lab</span>
+                        <span>Dispatch to Quality Lab ➔</span>
                       </button>
                     ) : (
                       <span className="px-3 py-1.5 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-1">

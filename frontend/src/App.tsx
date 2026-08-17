@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import MainLayout from './layouts/MainLayout';
-import { Home, Collector, Aggregator, Lab, Manufacturer, Verify } from './pages';
+import { Home, Collector, Aggregator, Lab, Manufacturer, Verify, Admin } from './pages';
 
 function App() {
   return (
@@ -15,6 +15,7 @@ function App() {
           <Route path="manufacturer" element={<Manufacturer />} />
           <Route path="verify" element={<Verify />} />
           <Route path="verify/:id" element={<Verify />} />
+          <Route path="admin" element={<Admin />} />
         </Route>
       </Routes>
       <Analytics />
