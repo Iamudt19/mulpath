@@ -59,7 +59,37 @@ export const AggregatorDashboard: React.FC = () => {
 
   // Real Bags & Lots Data
   const [bags, setBags] = useState<IncomingBag[]>([]);
-  const [lots, setLots] = useState<LotItem[]>([]);
+  const [lots, setLots] = useState<LotItem[]>([
+    {
+      id: 'LOT-ASHWA-2291',
+      name: 'Ashwagandha Premium Whole Root (LOT-2291)',
+      species: 'Ashwagandha (Withania somnifera)',
+      originalWeightKg: 150,
+      processedWeightKg: 97.5,
+      createdAt: '2026-08-16',
+      sourceBagIds: ['BATCH-2026-0816', 'BATCH-2026-0815'],
+      labStatus: 'PENDING',
+      sampleVialId: 'VIAL-MUL-8492',
+      processingHistory: [
+        { dryingTemp: '42°C', dryingHours: '18 hrs', grindingMachineId: 'MILL-HAMMER-04', date: '2026-08-16' }
+      ]
+    },
+    {
+      id: 'LOT-TULSI-1094',
+      name: 'Organic Holy Tulsi Dried Leaf (LOT-1094)',
+      species: 'Tulsi (Ocimum tenuiflorum)',
+      originalWeightKg: 120,
+      processedWeightKg: 78.0,
+      createdAt: '2026-08-15',
+      sourceBagIds: ['BATCH-2026-0814', 'BATCH-2026-0813'],
+      labStatus: 'PASSED',
+      buyerName: 'Dabur Ayurvedic Division',
+      sampleVialId: 'VIAL-MUL-3918',
+      processingHistory: [
+        { dryingTemp: '38°C', dryingHours: '14 hrs', grindingMachineId: 'MILL-HAMMER-02', date: '2026-08-15' }
+      ]
+    }
+  ]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Escrow Pool State (Fiat On-Ramp)
@@ -823,27 +853,65 @@ export const AggregatorDashboard: React.FC = () => {
 
       {/* Screen A7 — Lot Detail & Management */}
       {activeTab === 'lots' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold text-white text-base">Active Lots in Processing</h3>
-            {selectedLotDetail && (
-              <button onClick={() => setSelectedLotDetail(null)} className="text-xs text-slate-400 hover:text-white underline">
-                Clear Selection
-              </button>
-            )}
+        <div className="space-y-5 animate-fade-in-up">
+          {/* Top Bar with Actions */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h3 className="font-bold text-white text-base">Active Lots in Processing & Hub Inventory</h3>
+              <p className="text-xs text-slate-400">Aggregated multi-farmer lots ready for chemical assay and manufacturer sale</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setActiveTab('accepted')}
+                className="text-xs py-2 px-3 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30"
+              >
+                ➕ Aggregate More Bags ➔
+              </Button>
+            </div>
           </div>
 
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="glass-card p-3 text-center space-y-1">
+              <p className="text-[10px] text-slate-400 uppercase font-bold">Total Lots</p>
+              <p className="text-xl font-black text-white">{lots.length}</p>
+              <span className="text-[9px] text-slate-500">Mandi Storage</span>
+            </div>
+            <div className="glass-card p-3 text-center space-y-1">
+              <p className="text-[10px] text-slate-400 uppercase font-bold">Processed Stock</p>
+              <p className="text-xl font-black text-emerald-400">
+                {lots.reduce((s, l) => s + l.processedWeightKg, 0).toFixed(1)} kg
+              </p>
+              <span className="text-[9px] text-slate-500">Dry Milled Herb</span>
+            </div>
+            <div className="glass-card p-3 text-center space-y-1">
+              <p className="text-[10px] text-slate-400 uppercase font-bold">Lab Tested</p>
+              <p className="text-xl font-black text-teal-300">
+                {lots.filter(l => l.labStatus === 'PASSED').length} / {lots.length}
+              </p>
+              <span className="text-[9px] text-slate-500">Pharmacopeia Grade</span>
+            </div>
+            <div className="glass-card p-3 text-center space-y-1">
+              <p className="text-[10px] text-slate-400 uppercase font-bold">Assigned Buyers</p>
+              <p className="text-xl font-black text-purple-300">
+                {lots.filter(l => l.buyerName).length} Lots
+              </p>
+              <span className="text-[9px] text-slate-500">Ayurvedic Brands</span>
+            </div>
+          </div>
+
+          {/* Lots Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {lots.map(l => (
               <div 
                 key={l.id} 
-                onClick={() => setSelectedLotDetail(l)}
-                className={`glass-card p-5 space-y-3 cursor-pointer transition ${selectedLotDetail?.id === l.id ? 'border-emerald-500/60 bg-slate-900/90 shadow-lg' : ''}`}
+                className="glass-card p-5 space-y-3.5 border border-slate-800 hover:border-slate-700 transition"
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-bold text-white text-base">{l.name}</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">Created: {l.createdAt} • {l.species}</p>
+                    <span className="text-[10px] font-mono text-emerald-400 font-bold">{l.id}</span>
+                    <h4 className="font-bold text-white text-base leading-tight mt-0.5">{l.name}</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">{l.species} • Created {l.createdAt}</p>
                   </div>
                   <span className={`status-badge ${
                     l.labStatus === 'PASSED' ? 'tested' : l.labStatus === 'PENDING' ? 'aggregated' : 'collected'
@@ -852,29 +920,156 @@ export const AggregatorDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                {/* Weight Loss & Processing Readout */}
+                <div className="grid grid-cols-3 gap-2 text-xs bg-slate-900/80 p-3 rounded-xl border border-slate-800">
                   <div>
-                    <span className="text-slate-500">Raw Weight:</span>
+                    <span className="text-slate-500 text-[10px] block">Raw Intake:</span>
                     <p className="font-bold text-slate-300">{l.originalWeightKg} kg</p>
                   </div>
                   <div>
-                    <span className="text-slate-500">Processed Yield:</span>
+                    <span className="text-slate-500 text-[10px] block">Dry Yield:</span>
                     <p className="font-bold text-emerald-400">{l.processedWeightKg} kg</p>
                   </div>
-                </div>
-
-                <div className="text-xs text-slate-400">
-                  <strong>Source Batches:</strong> {l.sourceBagIds.join(', ')}
-                </div>
-
-                {l.buyerName && (
-                  <div className="text-xs text-slate-300 pt-1">
-                    <strong>Assigned Buyer:</strong> {l.buyerName}
+                  <div>
+                    <span className="text-slate-500 text-[10px] block">Moisture Loss:</span>
+                    <p className="font-bold text-amber-400">
+                      {Math.round((1 - (l.processedWeightKg / l.originalWeightKg)) * 100)}%
+                    </p>
                   </div>
-                )}
+                </div>
+
+                {/* Source Bags & Sample Vial */}
+                <div className="space-y-1 text-xs text-slate-400">
+                  <div className="flex justify-between">
+                    <span>Source Harvest Bags:</span>
+                    <span className="font-mono text-slate-300 font-semibold">{l.sourceBagIds.join(', ')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>NABL Vial Tag:</span>
+                    <span className="font-mono text-emerald-400 font-bold">{l.sampleVialId || 'VIAL-MUL-8492'}</span>
+                  </div>
+                  {l.buyerName && (
+                    <div className="flex justify-between text-purple-300 font-medium">
+                      <span>Reserved For:</span>
+                      <span>{l.buyerName}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Interactive Action Buttons */}
+                <div className="pt-2 border-t border-slate-800/80 flex flex-wrap gap-2">
+                  {l.labStatus !== 'PASSED' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLots(prev => prev.map(item => item.id === l.id ? { ...item, labStatus: 'PENDING' } : item));
+                        alert(`🧪 Sample vial #${l.sampleVialId || 'VIAL-MUL-8492'} dispatched to NABL Quality Testing Lab #18. Appears in Quality Lab review queue.`);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <span>🧪</span>
+                      <span>Dispatch Sample to Lab</span>
+                    </button>
+                  ) : (
+                    <span className="px-3 py-1.5 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-1">
+                      <span>✅</span>
+                      <span>HPLC Tested & Certified</span>
+                    </span>
+                  )}
+
+                  {!l.buyerName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const buyer = prompt('Enter Ayurvedic Manufacturer Name (e.g. Dabur India Ltd., Patanjali, Organic India):', 'Dabur India Ltd.');
+                        if (buyer) {
+                          setLots(prev => prev.map(item => item.id === l.id ? { ...item, buyerName: buyer } : item));
+                          alert(`📦 Lot ${l.id} reserved for ${buyer}.`);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <span>🏢</span>
+                      <span>Assign Buyer</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLotDetail(l)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1"
+                  >
+                    <span>🔍</span>
+                    <span>Audit Trace</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => alert(`📄 Printed official chain-of-custody barcode sheet for Lot ${l.id} with ${l.sourceBagIds.length} source bags.`)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1 ml-auto"
+                  >
+                    <span>🖨️</span>
+                    <span>Print Manifest</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
+
+          {/* 🔍 Lot Lineage & Audit Modal */}
+          {selectedLotDetail && (
+            <div className="modal-overlay" style={{ zIndex: 120 }}>
+              <div className="modal-content max-w-lg p-6 rounded-2xl bg-slate-950 border border-slate-800 text-left space-y-4 animate-fade-in-up">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                  <div>
+                    <span className="text-[10px] font-mono text-emerald-400 font-bold">{selectedLotDetail.id}</span>
+                    <h3 className="font-bold text-white text-base">{selectedLotDetail.name}</h3>
+                  </div>
+                  <button onClick={() => setSelectedLotDetail(null)} className="text-slate-400 hover:text-white">
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                    <span className="text-slate-400 uppercase font-bold text-[10px]">Processing Specifications:</span>
+                    <div className="grid grid-cols-2 gap-2 text-slate-300 font-mono text-[11px]">
+                      <div>Drying Temp: <strong className="text-white">42°C (18 hrs)</strong></div>
+                      <div>Milling Equipment: <strong className="text-white">MILL-HAMMER-04</strong></div>
+                      <div>Initial Intake: <strong className="text-white">{selectedLotDetail.originalWeightKg} kg</strong></div>
+                      <div>Processed Dry: <strong className="text-emerald-400">{selectedLotDetail.processedWeightKg} kg</strong></div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5">
+                    <span className="text-slate-400 uppercase font-bold text-[10px]">Source Harvest Lineage:</span>
+                    <p className="text-slate-300">Merged from <strong className="text-white">{selectedLotDetail.sourceBagIds.length}</strong> certified wild harvest bags:</p>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedLotDetail.sourceBagIds.map((bagId, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-emerald-300 font-mono text-[10px]">
+                          🌿 {bagId}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+                    <span className="text-slate-400 uppercase font-bold text-[10px]">Quality Laboratory Vial:</span>
+                    <div className="flex justify-between items-center pt-1 font-mono">
+                      <span className="text-slate-300 font-bold">{selectedLotDetail.sampleVialId || 'VIAL-MUL-8492'}</span>
+                      <span className={`status-badge ${selectedLotDetail.labStatus === 'PASSED' ? 'tested' : 'aggregated'}`}>
+                        {selectedLotDetail.labStatus}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <Button onClick={() => setSelectedLotDetail(null)} className="w-full py-2.5">
+                  Close Audit View
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
