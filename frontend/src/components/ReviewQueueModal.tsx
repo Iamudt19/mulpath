@@ -48,8 +48,23 @@ export const ReviewQueueModal: React.FC<{ isOpen: boolean; onClose: () => void }
 
   if (!isOpen) return null;
 
-  const handleResolve = (id: string, newStatus: 'RESOLVED' | 'REJECTED') => {
+  const handleResolve = async (id: string, newStatus: 'RESOLVED' | 'REJECTED') => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
+    const numericId = parseInt(id.replace(/\D/g, ''));
+    if (!isNaN(numericId)) {
+      try {
+        await fetch(`${API_BASE}/api/admin/resolve-flag`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            batchId: numericId,
+            resolution: newStatus === 'RESOLVED' ? 'APPROVE' : 'REJECT'
+          })
+        });
+      } catch (e) {
+        console.warn('Flag resolution updated locally');
+      }
+    }
   };
 
   const filtered = items.filter(item => {

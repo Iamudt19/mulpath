@@ -75,13 +75,20 @@ export async function syncQueuedHarvests(): Promise<{ synced: number; failed: nu
 
       if (item.photoBase64) {
         // Convert Base64 back to Blob/File
-        const res = await fetch(item.photoBase64);
-        const blob = await res.blob();
+        const imgRes = await fetch(item.photoBase64);
+        const blob = await imgRes.blob();
         formData.append('photo', blob, item.photoName || 'harvest.jpg');
+      }
+
+      const token = localStorage.getItem('mulpath_token');
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
       const res = await fetch(`${API_BASE}/api/harvests`, {
         method: 'POST',
+        headers,
         body: formData,
       });
 

@@ -87,9 +87,11 @@ export const VerifyPage: React.FC = () => {
               blockchainTxHash: f.txHash || f.invoiceHash || batchTxHash || '0x3a7b9c1d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b',
               purityScore: cert ? parseFloat(cert.notes?.match(/([\d.]+)%/)?.[1] || '0') || 98.4 : 98.4,
               scanCount: f.scanCount || 1,
-              sustainabilityScore: 95,
+              latitude: primaryBatch?.latitude || 24.465,
+              longitude: primaryBatch?.longitude || 74.869,
+              serial: (new URLSearchParams(window.location.search)).get('serial'),
               harvesters: batches.length > 0 ? batches.map((b: any) => ({
-                name: b.collector?.name || 'Ramesh Patel (Collector)',
+                name: b.collector?.name || 'Verified Forest Collector',
                 region: b.originLocation || 'Nimbahera Forest Buffer Zone',
                 state: 'Rajasthan',
                 species: b.herbName || 'Ashwagandha',
@@ -295,7 +297,14 @@ export const VerifyPage: React.FC = () => {
 
             <div>
               <h1 className="text-2xl font-black text-white leading-tight">{productData.name}</h1>
-              <p className="text-xs text-slate-400 mt-1">{productData.brand}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <p className="text-xs text-slate-400">{productData.brand}</p>
+                {productData.serial && (
+                  <span className="text-[10px] font-mono text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded font-bold">
+                    Serial #{productData.serial}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Trust Badges Bar */}
@@ -358,20 +367,26 @@ export const VerifyPage: React.FC = () => {
             </div>
 
             <div className="h-48 w-full">
-              <MapContainer center={[24.465, 74.869]} zoom={10} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+              <MapContainer
+                center={[productData.latitude || 24.465, productData.longitude || 74.869]}
+                zoom={10}
+                style={{ height: '100%', width: '100%' }}
+                zoomControl={false}
+              >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <Marker position={[24.465, 74.869]}>
-                  <Popup>Certified Forest Buffer Zone, Chittorgarh</Popup>
+                <Marker position={[productData.latitude || 24.465, productData.longitude || 74.869]}>
+                  <Popup>{productData.harvesters?.[0]?.region || 'Certified Forest Buffer Zone'}</Popup>
                 </Marker>
               </MapContainer>
             </div>
 
             <div className="p-4 bg-slate-900/60 flex items-center justify-between text-xs">
               <div>
-                <span className="text-slate-400">Harvester:</span>
-                <p className="font-bold text-white">Ramesh P. (Verified Forest Collector)</p>
+                <span className="text-slate-400">Harvester / Producer:</span>
+                <p className="font-bold text-white">{productData.harvesters?.[0]?.name || 'Verified Forest Collector'}</p>
+                <p className="text-[10px] text-slate-400 font-mono">{productData.harvesters?.[0]?.region || 'Approved Botanical Geofence'}</p>
               </div>
-              <span className="text-emerald-400 font-semibold">🌿 AI Verified Species Match (95%)</span>
+              <span className="text-emerald-400 font-semibold">🌿 AI Verified Species Match ({productData.harvesters?.[0]?.aiMatch || 95}%)</span>
             </div>
           </div>
 
