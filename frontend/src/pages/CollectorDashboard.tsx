@@ -152,13 +152,11 @@ export const CollectorDashboard: React.FC = () => {
     const now = Date.now();
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setSessionStartTime(now);
-    setSessionSecondsLeft(90);
+    setSessionSecondsLeft(180);
     setChallengeCode(code);
     setExifCoords(null);
     setLocationMismatch(false);
     setExifDistanceMeters(null);
-    setPhotoFile(null);
-    setPhotoBlobUrl(null);
 
     // Sensor Fusion initial state
     setMotionSummary({
@@ -173,14 +171,14 @@ export const CollectorDashboard: React.FC = () => {
     setCurrentStep('F5_GPS');
   };
 
-  // Timer Effect for 90s Atomic Session — Auto-Submit on Timeout
+  // Timer Effect for Atomic Session — Auto-Submit on Timeout
   useEffect(() => {
     const isHarvestFlow = ['F5_GPS', 'F6_CAMERA', 'F7_NFC', 'F8_REVIEW'].includes(currentStep);
     if (!isHarvestFlow || !sessionStartTime) return;
 
     const interval = setInterval(() => {
       const elapsedSec = Math.floor((Date.now() - sessionStartTime) / 1000);
-      const remaining = Math.max(0, 90 - elapsedSec);
+      const remaining = Math.max(0, 180 - elapsedSec);
       setSessionSecondsLeft(remaining);
 
       if (remaining === 0) {
@@ -190,7 +188,7 @@ export const CollectorDashboard: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [currentStep, sessionStartTime, species, quantity, latVal, lngVal, sealId, photoFile]);
+  }, [currentStep, sessionStartTime]);
 
   // Motion Sensor Listener (HTML5 DeviceMotionEvent) (#2)
   useEffect(() => {
