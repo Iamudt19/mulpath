@@ -556,9 +556,8 @@ export const AggregatorDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSealStatusOverride(true)}
-                  className={`py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
-                    sealStatusOverride ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'
-                  }`}
+                  className={`py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${sealStatusOverride ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
                 >
                   <span>✅</span>
                   <span>Seal Intact</span>
@@ -566,9 +565,8 @@ export const AggregatorDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSealStatusOverride(false)}
-                  className={`py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
-                    !sealStatusOverride ? 'bg-red-500/20 border-red-400 text-red-300' : 'bg-slate-950 border-slate-800 text-slate-400'
-                  }`}
+                  className={`py-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${!sealStatusOverride ? 'bg-red-500/20 border-red-400 text-red-300' : 'bg-slate-950 border-slate-800 text-slate-400'
+                    }`}
                 >
                   <span>⚠️</span>
                   <span>Seal Broken / Damaged</span>
@@ -680,7 +678,7 @@ export const AggregatorDashboard: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold text-white">Log Processing Record (Drying & Milling)</h3>
             <p className="text-xs text-slate-400">
-              {selectedBatchForProcess 
+              {selectedBatchForProcess
                 ? `Recording parameters for selected batch: ${selectedBatchForProcess.herbName} (${selectedBatchForProcess.batchId})`
                 : 'Record machine parameters for cryptographic batch compliance'}
             </p>
@@ -891,118 +889,117 @@ export const AggregatorDashboard: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {lots.map(l => (
-              <div 
-                key={l.id} 
-                className="glass-card p-5 space-y-3.5 border border-slate-800 hover:border-slate-700 transition"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] font-mono text-emerald-400 font-bold">{l.id}</span>
-                    <h4 className="font-bold text-white text-base leading-tight mt-0.5">{l.name}</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">{l.species} • Created {l.createdAt}</p>
-                  </div>
-                  <span className={`status-badge ${
-                    l.labStatus === 'PASSED' ? 'tested' : l.labStatus === 'PENDING' ? 'aggregated' : 'collected'
-                  }`}>
-                    Lab: {l.labStatus}
-                  </span>
-                </div>
-
-                {/* Weight Loss & Processing Readout */}
-                <div className="grid grid-cols-3 gap-2 text-xs bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                  <div>
-                    <span className="text-slate-500 text-[10px] block">Raw Intake:</span>
-                    <p className="font-bold text-slate-300">{l.originalWeightKg} kg</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[10px] block">Dry Yield:</span>
-                    <p className="font-bold text-emerald-400">{l.processedWeightKg} kg</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[10px] block">Moisture Loss:</span>
-                    <p className="font-bold text-amber-400">
-                      {Math.round((1 - (l.processedWeightKg / l.originalWeightKg)) * 100)}%
-                    </p>
-                  </div>
-                </div>
-
-                {/* Source Bags & Sample Vial */}
-                <div className="space-y-1 text-xs text-slate-400">
-                  <div className="flex justify-between">
-                    <span>Source Harvest Bags:</span>
-                    <span className="font-mono text-slate-300 font-semibold">{l.sourceBagIds.join(', ')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>NABL Vial Tag:</span>
-                    <span className="font-mono text-emerald-400 font-bold">{l.sampleVialId || 'VIAL-MUL-8492'}</span>
-                  </div>
-                  {l.buyerName && (
-                    <div className="flex justify-between text-purple-300 font-medium">
-                      <span>Reserved For:</span>
-                      <span>{l.buyerName}</span>
+                <div
+                  key={l.id}
+                  className="glass-card p-5 space-y-3.5 border border-slate-800 hover:border-slate-700 transition"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold">{l.id}</span>
+                      <h4 className="font-bold text-white text-base leading-tight mt-0.5">{l.name}</h4>
+                      <p className="text-xs text-slate-400 mt-0.5">{l.species} • Created {l.createdAt}</p>
                     </div>
-                  )}
-                </div>
-
-                {/* Interactive Action Buttons */}
-                <div className="pt-2 border-t border-slate-800/80 flex flex-wrap gap-2">
-                  {l.labStatus !== 'PASSED' ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLots(prev => prev.map(item => item.id === l.id ? { ...item, labStatus: 'PENDING' } : item));
-                        alert(`🧪 Sample vial #${l.sampleVialId || 'VIAL-MUL-8492'} dispatched to NABL Quality Testing Lab #18. Appears in Quality Lab review queue.`);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-xs font-semibold flex items-center gap-1"
-                    >
-                      <span>🧪</span>
-                      <span>Dispatch Sample to Lab</span>
-                    </button>
-                  ) : (
-                    <span className="px-3 py-1.5 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-1">
-                      <span>✅</span>
-                      <span>HPLC Tested & Certified</span>
+                    <span className={`status-badge ${l.labStatus === 'PASSED' ? 'tested' : l.labStatus === 'PENDING' ? 'aggregated' : 'collected'
+                      }`}>
+                      Lab: {l.labStatus}
                     </span>
-                  )}
+                  </div>
 
-                  {!l.buyerName && (
+                  {/* Weight Loss & Processing Readout */}
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                    <div>
+                      <span className="text-slate-500 text-[10px] block">Raw Intake:</span>
+                      <p className="font-bold text-slate-300">{l.originalWeightKg} kg</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[10px] block">Dry Yield:</span>
+                      <p className="font-bold text-emerald-400">{l.processedWeightKg} kg</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[10px] block">Moisture Loss:</span>
+                      <p className="font-bold text-amber-400">
+                        {Math.round((1 - (l.processedWeightKg / l.originalWeightKg)) * 100)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Source Bags & Sample Vial */}
+                  <div className="space-y-1 text-xs text-slate-400">
+                    <div className="flex justify-between">
+                      <span>Source Harvest Bags:</span>
+                      <span className="font-mono text-slate-300 font-semibold">{l.sourceBagIds.join(', ')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>NABL Vial Tag:</span>
+                      <span className="font-mono text-emerald-400 font-bold">{l.sampleVialId || 'VIAL-MUL-8492'}</span>
+                    </div>
+                    {l.buyerName && (
+                      <div className="flex justify-between text-purple-300 font-medium">
+                        <span>Reserved For:</span>
+                        <span>{l.buyerName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Interactive Action Buttons */}
+                  <div className="pt-2 border-t border-slate-800/80 flex flex-wrap gap-2">
+                    {l.labStatus !== 'PASSED' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLots(prev => prev.map(item => item.id === l.id ? { ...item, labStatus: 'PENDING' } : item));
+                          alert(`🧪 Sample vial #${l.sampleVialId || 'VIAL-MUL-8492'} dispatched to NABL Quality Testing Lab #18. Appears in Quality Lab review queue.`);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 text-xs font-semibold flex items-center gap-1"
+                      >
+                        <span>🧪</span>
+                        <span>Dispatch Sample to Lab</span>
+                      </button>
+                    ) : (
+                      <span className="px-3 py-1.5 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold flex items-center gap-1">
+                        <span>✅</span>
+                        <span>HPLC Tested & Certified</span>
+                      </span>
+                    )}
+
+                    {!l.buyerName && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const buyer = prompt('Enter Ayurvedic Manufacturer Name (e.g. Dabur India Ltd., Patanjali, Organic India):', 'Dabur India Ltd.');
+                          if (buyer) {
+                            setLots(prev => prev.map(item => item.id === l.id ? { ...item, buyerName: buyer } : item));
+                            alert(`📦 Lot ${l.id} reserved for ${buyer}.`);
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 text-xs font-semibold flex items-center gap-1"
+                      >
+                        <span>🏢</span>
+                        <span>Assign Buyer</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => {
-                        const buyer = prompt('Enter Ayurvedic Manufacturer Name (e.g. Dabur India Ltd., Patanjali, Organic India):', 'Dabur India Ltd.');
-                        if (buyer) {
-                          setLots(prev => prev.map(item => item.id === l.id ? { ...item, buyerName: buyer } : item));
-                          alert(`📦 Lot ${l.id} reserved for ${buyer}.`);
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 text-xs font-semibold flex items-center gap-1"
+                      onClick={() => setSelectedLotDetail(l)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1"
                     >
-                      <span>🏢</span>
-                      <span>Assign Buyer</span>
+                      <span>🔍</span>
+                      <span>Audit Trace</span>
                     </button>
-                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLotDetail(l)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1"
-                  >
-                    <span>🔍</span>
-                    <span>Audit Trace</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => alert(`📄 Printed official chain-of-custody barcode sheet for Lot ${l.id} with ${l.sourceBagIds.length} source bags.`)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1 ml-auto"
-                  >
-                    <span>🖨️</span>
-                    <span>Print Manifest</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => alert(`📄 Printed official chain-of-custody barcode sheet for Lot ${l.id} with ${l.sourceBagIds.length} source bags.`)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1 ml-auto"
+                    >
+                      <span>🖨️</span>
+                      <span>Print Manifest</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
           )}
 
           {/* 🔍 Lot Lineage & Audit Modal */}
@@ -1109,11 +1106,10 @@ export const AggregatorDashboard: React.FC = () => {
                         key={amt}
                         type="button"
                         onClick={() => setDepositAmountInput(amt)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                          depositAmountInput === amt
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${depositAmountInput === amt
                             ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
                             : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
-                        }`}
+                          }`}
                       >
                         ₹{parseInt(amt).toLocaleString('en-IN')}
                       </button>
@@ -1136,11 +1132,10 @@ export const AggregatorDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setDepositMethod('UPI')}
-                      className={`p-3 rounded-xl text-xs font-bold border text-left flex items-center gap-2 ${
-                        depositMethod === 'UPI'
+                      className={`p-3 rounded-xl text-xs font-bold border text-left flex items-center gap-2 ${depositMethod === 'UPI'
                           ? 'bg-emerald-500/20 border-emerald-400 text-white'
                           : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800'
-                      }`}
+                        }`}
                     >
                       <span className="text-lg">📱</span>
                       <div>
@@ -1152,11 +1147,10 @@ export const AggregatorDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setDepositMethod('NETBANKING')}
-                      className={`p-3 rounded-xl text-xs font-bold border text-left flex items-center gap-2 ${
-                        depositMethod === 'NETBANKING'
+                      className={`p-3 rounded-xl text-xs font-bold border text-left flex items-center gap-2 ${depositMethod === 'NETBANKING'
                           ? 'bg-emerald-500/20 border-emerald-400 text-white'
                           : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800'
-                      }`}
+                        }`}
                     >
                       <span className="text-lg">🏦</span>
                       <div>

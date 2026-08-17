@@ -23,6 +23,7 @@ interface MarketplaceLot {
 
 interface RegisteredBatch {
   id: string;
+  dbId?: number | string;
   productName: string;
   batchUnits: number;
   retailPriceInr: number;
@@ -124,10 +125,11 @@ export const ManufacturerDashboard: React.FC = () => {
         const data = await res.json();
         const mapped: RegisteredBatch[] = data.map((f: any) => ({
           id: `BATCH-MFG-${f.id}`,
+          dbId: f.id,
           productName: f.name,
           batchUnits: 250,
           retailPriceInr: f.finalPriceInr,
-          farmerSharePercent: f.fairTradePercentage || 31.2,
+          farmerSharePercent: f.fairTradePercentage || 18.2,
           createdAt: new Date(f.createdAt || Date.now()).toISOString().split('T')[0],
           lotsUsed: f.batches?.map((b: any) => ({ name: b.herbName, percent: 100 })) || [{ name: 'Certified Organic Herbs', percent: 100 }],
           serialQrCodes: Array.from({ length: 8 }, (_, i) => `MUL-PROD-${f.id}-${(i + 1).toString().padStart(4, '0')}`)
@@ -188,6 +190,7 @@ export const ManufacturerDashboard: React.FC = () => {
   };
 
   const [mfgTxHash, setMfgTxHash] = useState<string>('');
+  const [createdDbId, setCreatedDbId] = useState<number | string>(1);
 
   // Register Formulation
   const handleRegisterBatch = async (e: React.FormEvent) => {
@@ -213,6 +216,9 @@ export const ManufacturerDashboard: React.FC = () => {
         if (data.txHash) {
           setMfgTxHash(data.txHash);
         }
+        if (data.formulation?.id) {
+          setCreatedDbId(data.formulation.id);
+        }
       }
     } catch (err) {
       console.warn('Formulation registered locally');
@@ -222,12 +228,14 @@ export const ManufacturerDashboard: React.FC = () => {
   const handleBlockchainModalDone = () => {
     setShowBlockchainModal(false);
     fetchRegisteredFormulations();
-    const newBatchId = `BATCH-MFG-${Date.now().toString().slice(-4)}`;
+    const targetDbId = createdDbId || 1;
+    const newBatchId = `BATCH-MFG-${targetDbId}`;
     const units = parseInt(batchUnits) || 50;
-    const serials = Array.from({ length: Math.min(units, 12) }, (_, i) => `MUL-PROD-${newBatchId.slice(-4)}-${(i + 1).toString().padStart(4, '0')}`);
+    const serials = Array.from({ length: Math.min(units, 12) }, (_, i) => `MUL-PROD-${targetDbId}-${(i + 1).toString().padStart(4, '0')}`);
 
     const newBatch: RegisteredBatch = {
       id: newBatchId,
+      dbId: targetDbId,
       productName,
       batchUnits: units,
       retailPriceInr: parseFloat(retailPricePerUnit) || 499,
@@ -567,24 +575,31 @@ export const ManufacturerDashboard: React.FC = () => {
 
           {/* Serial QR Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {latestRegisteredBatch.serialQrCodes.map((serial, idx) => (
-              <div key={idx} className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl text-center space-y-2">
-                <div className="w-24 h-24 mx-auto bg-white p-1.5 rounded-lg flex items-center justify-center">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://mulpath.app/verify/1?serial=${serial}`}
-                    alt="QR"
-                    className="w-full h-full"
-                  />
+            {latestRegisteredBatch.serialQrCodes.map((serial, idx) => {
+              const targetId = latestRegisteredBatch.dbId || createdDbId || 1;
+              const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mulpath.vercel.app';
+              const verifyUrl = `${originUrl}/verify/${targetId}?serial=${serial}`;
+              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verifyUrl)}`;
+
+              return (
+                <div key={idx} className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl text-center space-y-2">
+                  <div className="w-24 h-24 mx-auto bg-white p-1.5 rounded-lg flex items-center justify-center">
+                    <img
+                      src={qrSrc}
+                      alt="QR"
+                      className="w-full h-full"
+                    />
+                  </div>
+                  <p className="text-[10px] font-mono text-slate-300 font-bold truncate">#{serial}</p>
+                  <button
+                    onClick={() => navigate(`/verify/${targetId}`)}
+                    className="text-[10px] text-emerald-400 hover:underline font-semibold block mx-auto"
+                  >
+                    Test Consumer View ↗
+                  </button>
                 </div>
-                <p className="text-[10px] font-mono text-slate-300 font-bold truncate">#{serial}</p>
-                <button
-                  onClick={() => navigate(`/verify/1`)}
-                  className="text-[10px] text-emerald-400 hover:underline font-semibold block mx-auto"
-                >
-                  Test Consumer View ↗
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
@@ -606,24 +621,27 @@ export const ManufacturerDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-950/60">
-                {registeredBatches.map(b => (
-                  <tr key={b.id} className="hover:bg-slate-900/40">
-                    <td className="p-3 font-mono font-bold text-slate-200">{b.id}</td>
-                    <td className="p-3 font-semibold text-white">{b.productName}</td>
-                    <td className="p-3 text-slate-300">{b.batchUnits} bottles</td>
-                    <td className="p-3 font-bold text-white">₹{b.retailPriceInr}</td>
-                    <td className="p-3 font-bold text-emerald-400">{b.farmerSharePercent}%</td>
-                    <td className="p-3">
-                      <button
-                        onClick={() => navigate('/verify/1')}
-                        className="text-xs text-emerald-400 hover:underline font-semibold flex items-center gap-1"
-                      >
-                        <span>View as Consumer</span>
-                        <span>↗</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {registeredBatches.map(b => {
+                  const targetId = b.dbId || b.id.replace('BATCH-MFG-', '');
+                  return (
+                    <tr key={b.id} className="hover:bg-slate-900/40">
+                      <td className="p-3 font-mono font-bold text-slate-200">{b.id}</td>
+                      <td className="p-3 font-semibold text-white">{b.productName}</td>
+                      <td className="p-3 text-slate-300">{b.batchUnits} bottles</td>
+                      <td className="p-3 font-bold text-white">₹{b.retailPriceInr}</td>
+                      <td className="p-3 font-bold text-emerald-400">{b.farmerSharePercent}%</td>
+                      <td className="p-3">
+                        <button
+                          onClick={() => navigate(`/verify/${targetId}`)}
+                          className="text-xs text-emerald-400 hover:underline font-semibold flex items-center gap-1"
+                        >
+                          <span>View as Consumer</span>
+                          <span>↗</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

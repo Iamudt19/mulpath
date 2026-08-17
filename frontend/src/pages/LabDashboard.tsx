@@ -17,7 +17,29 @@ interface LabSample {
 }
 
 export const LabDashboard: React.FC = () => {
-  const [samples, setSamples] = useState<LabSample[]>([]);
+  const [samples, setSamples] = useState<LabSample[]>([
+    {
+      id: 1,
+      lotId: 'LOT-ASHWA-2291',
+      herbName: 'Ashwagandha (Withania somnifera)',
+      receivedDate: '2026-08-15',
+      sampleWeightGm: 250,
+      aggregatorName: 'Mandi Hub Nimbahera',
+      status: 'AWAITING_TEST',
+      sampleVialId: 'VIAL-MUL-8492'
+    },
+    {
+      id: 2,
+      lotId: 'LOT-TULSI-1094',
+      herbName: 'Tulsi (Ocimum tenuiflorum)',
+      receivedDate: '2026-08-16',
+      sampleWeightGm: 200,
+      aggregatorName: 'Central Rajasthan Mandi Hub',
+      status: 'AWAITING_TEST',
+      sampleVialId: 'VIAL-MUL-3918'
+    }
+  ]);
+
   const [selectedSample, setSelectedSample] = useState<LabSample | null>(null);
 
   // Sample Chain-of-Custody Scan-In State (#6)
@@ -161,55 +183,43 @@ export const LabDashboard: React.FC = () => {
             </div>
           </div>
 
-          {samples.length === 0 ? (
-            <div className="glass-card p-12 text-center text-slate-400 space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-3xl mx-auto shadow-inner">
-                🧪
-              </div>
-              <h4 className="text-base font-bold text-white">No Samples Awaiting Chemical Analysis</h4>
-              <p className="text-xs max-w-sm mx-auto text-slate-400">
-                When mandi aggregators process and dispatch herb sample vials, they will appear here in real time for HPLC chemical assay and on-chain certificate recording.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900 text-slate-400 uppercase font-semibold border-b border-slate-800">
-                  <tr>
-                    <th className="p-3">Lot ID</th>
-                    <th className="p-3">Species</th>
-                    <th className="p-3">Sample Weight</th>
-                    <th className="p-3">Aggregator Origin</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">Action</th>
+          <div className="overflow-x-auto rounded-xl border border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                <tr>
+                  <th className="p-3">Lot ID</th>
+                  <th className="p-3">Species</th>
+                  <th className="p-3">Sample Weight</th>
+                  <th className="p-3">Aggregator Origin</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 bg-slate-950/60">
+                {samples.map(s => (
+                  <tr key={s.id} className="hover:bg-slate-900/40">
+                    <td className="p-3 font-mono font-bold text-slate-200">{s.lotId}</td>
+                    <td className="p-3 font-semibold text-white">{s.herbName}</td>
+                    <td className="p-3 text-slate-300">{s.sampleWeightGm} gm</td>
+                    <td className="p-3 text-slate-400">{s.aggregatorName}</td>
+                    <td className="p-3">
+                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded">
+                        AWAITING TEST
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <Button
+                        onClick={() => setSelectedSample(s)}
+                        className="py-1.5 px-3 text-xs"
+                      >
+                        Enter Results ➔
+                      </Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 bg-slate-950/60">
-                  {samples.map(s => (
-                    <tr key={s.id} className="hover:bg-slate-900/40">
-                      <td className="p-3 font-mono font-bold text-slate-200">{s.lotId}</td>
-                      <td className="p-3 font-semibold text-white">{s.herbName}</td>
-                      <td className="p-3 text-slate-300">{s.sampleWeightGm} gm</td>
-                      <td className="p-3 text-slate-400">{s.aggregatorName}</td>
-                      <td className="p-3">
-                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded">
-                          AWAITING TEST
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <Button
-                          onClick={() => setSelectedSample(s)}
-                          className="py-1.5 px-3 text-xs"
-                        >
-                          Enter Results ➔
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -234,9 +244,8 @@ export const LabDashboard: React.FC = () => {
                 <strong className="text-sm font-bold text-white">Scan Physical Sample Vial NFC / Barcode Tag</strong>
                 <p className="text-xs text-slate-400 mt-0.5">Vial tag assigned at lot extraction must match physical vial before test upload.</p>
               </div>
-              <span className={`text-xs px-2.5 py-1 rounded font-mono font-bold ${
-                vialVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-              }`}>
+              <span className={`text-xs px-2.5 py-1 rounded font-mono font-bold ${vialVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                }`}>
                 {vialVerified ? '✅ VIAL VERIFIED' : '🔒 SCAN REQUIRED'}
               </span>
             </div>
@@ -292,11 +301,10 @@ export const LabDashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={handleImportFromHplcMachine}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
-                  entryMode === 'HPLC_NETWORKED' 
-                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow' 
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${entryMode === 'HPLC_NETWORKED'
+                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'
-                }`}
+                  }`}
               >
                 <span>📥</span>
                 <span>Import from HPLC Machine</span>
@@ -305,11 +313,10 @@ export const LabDashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEntryMode('MANUAL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                  entryMode === 'MANUAL' 
-                    ? 'bg-amber-500/20 border-amber-400 text-amber-300' 
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${entryMode === 'MANUAL'
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-300'
                     : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'
-                }`}
+                  }`}
               >
                 Manual Entry
               </button>
@@ -427,7 +434,7 @@ export const LabDashboard: React.FC = () => {
               {testResult === 'PASSED' ? 'Certificate Permanently Recorded' : 'Failure Immutably Logged'}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              {testResult === 'PASSED' 
+              {testResult === 'PASSED'
                 ? 'Lot marked PASSED and immediately made available to manufacturers.'
                 : 'Lot flagged as FAILED. Manufacturers and aggregators alerted.'}
             </p>
