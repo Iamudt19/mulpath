@@ -38,14 +38,14 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  otpSessions                  OtpSession[]
-  collectedBatches             HerbBatch[] @relation("CollectorRelation")
-  assignedAggregatorBatches    HerbBatch[] @relation("AggregatorRelation")
-  assignedLabBatches           HerbBatch[] @relation("LabRelation")
-  purchasedManufacturerBatches HerbBatch[] @relation("ManufacturerRelation")
-  labCertificates              TestCertificate[]
-  receivedTransfers            PriceTransfer[] @relation("RecipientRelation")
-  sentTransfers                PriceTransfer[] @relation("SenderRelation")
+  otpSessions      OtpSession[]
+  collectedBatches HerbBatch[] @relation("CollectorRelation")
+  assignedAggregatorBatches HerbBatch[] @relation("AggregatorRelation")
+  assignedLabBatches        HerbBatch[] @relation("LabRelation")
+  purchasedMfgBatches       HerbBatch[] @relation("ManufacturerRelation")
+  labCertificates  TestCertificate[]
+  receivedTransfers PriceTransfer[] @relation("RecipientRelation")
+  sentTransfers     PriceTransfer[] @relation("SenderRelation")
 }
 
 model OtpSession {
@@ -78,19 +78,6 @@ model HerbBatch {
   harvestDate           DateTime
   status                BatchStatus    @default(COLLECTED)
 
-  // ── Targeted Stakeholder Custody Fields ──
-  collectorId             Int
-  collector               User           @relation("CollectorRelation", fields: [collectorId], references: [id])
-
-  assignedAggregatorId    Int?
-  assignedAggregator      User?          @relation("AggregatorRelation", fields: [assignedAggregatorId], references: [id])
-
-  assignedLabId           Int?
-  assignedLab             User?          @relation("LabRelation", fields: [assignedLabId], references: [id])
-
-  purchasedManufacturerId Int?
-  purchasedManufacturer   User?          @relation("ManufacturerRelation", fields: [purchasedManufacturerId], references: [id])
-
   // Fraud Hardening Fields (#1 - #6)
   sessionStartTimestamp DateTime?
   challengeCode         String?
@@ -101,6 +88,18 @@ model HerbBatch {
   sampleVialId          String?        @unique
   aggregatorWeightKg    Float?
   weightMismatch        Boolean        @default(false)
+
+  collectorId           Int
+  collector             User           @relation("CollectorRelation", fields: [collectorId], references: [id])
+
+  assignedAggregatorId    Int?
+  assignedAggregator      User?          @relation("AggregatorRelation", fields: [assignedAggregatorId], references: [id])
+
+  assignedLabId           Int?
+  assignedLab             User?          @relation("LabRelation", fields: [assignedLabId], references: [id])
+
+  purchasedManufacturerId Int?
+  purchasedManufacturer   User?          @relation("ManufacturerRelation", fields: [purchasedManufacturerId], references: [id])
 
   certificates          TestCertificate[]
   priceTransfers        PriceTransfer[]
@@ -138,6 +137,7 @@ model Formulation {
   fairTradePercentage Float?
   invoiceHash         String?
   invoiceUrl          String?
+  txHash              String?
 
   batches             HerbBatch[]
 

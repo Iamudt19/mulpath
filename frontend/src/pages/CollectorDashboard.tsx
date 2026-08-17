@@ -121,13 +121,6 @@ export const CollectorDashboard: React.FC = () => {
   const [recentTransfers, setRecentTransfers] = useState<any[]>([]);
   const [autoSubmitToast, setAutoSubmitToast] = useState<string | null>(null);
 
-  // Targeted Aggregator Handoff State
-  const [assignedAggregatorId, setAssignedAggregatorId] = useState<string>('2');
-  const [aggregatorsList, setAggregatorsList] = useState<Array<{ id: number; name: string; phone?: string }>>([
-    { id: 2, name: 'Shakti Enterprises (Chittorgarh Mandi Depot)' },
-    { id: 3, name: 'Malwa Agro Processing Center (Neemuch Mandi)' }
-  ]);
-
   // Modals & Popups
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
   const [currentTxHash, setCurrentTxHash] = useState<string>('');
@@ -241,10 +234,6 @@ export const CollectorDashboard: React.FC = () => {
   useEffect(() => {
     fetchHarvestHistory();
     triggerRealPaymentCheck();
-    fetch(`${API_BASE}/api/stakeholders/aggregators`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (Array.isArray(data) && data.length > 0) setAggregatorsList(data); })
-      .catch(() => {});
     const poller = setInterval(() => {
       if (currentStep === 'F4_HOME' || currentStep === 'F10_WALLET') {
         fetchHarvestHistory();
@@ -627,7 +616,6 @@ export const CollectorDashboard: React.FC = () => {
       }
       formData.append('motionFlags', JSON.stringify(motionSummary));
       if (photoFile) formData.append('photo', photoFile);
-      if (assignedAggregatorId) formData.append('assignedAggregatorId', assignedAggregatorId);
       if (authToken) {
         formData.append('authToken', authToken);
       }
@@ -1525,28 +1513,6 @@ export const CollectorDashboard: React.FC = () => {
               </div>
               <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded font-bold">READY TO SEAL</span>
             </div>
-          </div>
-
-          {/* Targeted Destination Aggregator Selection */}
-          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🏭</span>
-              <div>
-                <label className="input-label text-slate-200 font-bold mb-0">Destination Mandi / Aggregator Depot</label>
-                <p className="text-[10px] text-slate-400">Only the selected Mandi center will receive and process your bag.</p>
-              </div>
-            </div>
-            <select
-              value={assignedAggregatorId}
-              onChange={e => setAssignedAggregatorId(e.target.value)}
-              className="input-field text-xs font-semibold"
-            >
-              {aggregatorsList.map(a => (
-                <option key={a.id} value={a.id.toString()}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="space-y-1">

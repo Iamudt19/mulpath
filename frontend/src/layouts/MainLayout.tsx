@@ -1,151 +1,191 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ReviewQueueModal } from '../components/ReviewQueueModal';
-import { AuthModal, type StakeholderRole } from '../components/AuthModal';
+import { AuthModal, type UserRole } from '../components/AuthModal';
 
 const navItems = [
-  { path: '/', label: 'Overview', icon: '🏠' },
-  { path: '/collector', label: 'Collector', icon: '🌿', role: 'COLLECTOR' },
-  { path: '/aggregator', label: 'Aggregator', icon: '🏭', role: 'AGGREGATOR' },
-  { path: '/lab', label: 'Quality Lab', icon: '🧪', role: 'LAB' },
-  { path: '/manufacturer', label: 'Manufacturer', icon: '💊', role: 'MANUFACTURER' },
-  { path: '/verify', label: 'Verify Bottle', icon: '🔍', role: 'CONSUMER' },
-  { path: '/admin', label: 'Admin Ops', icon: '🛡️', role: 'ADMIN' },
+  { path: '/', label: 'Home', icon: '🏠' },
+  { path: '/collector', label: 'Collector', icon: '🌿' },
+  { path: '/aggregator', label: 'Aggregator', icon: '🏭' },
+  { path: '/lab', label: 'Lab', icon: '🧪' },
+  { path: '/manufacturer', label: 'Manufacturer', icon: '💊' },
+  { path: '/verify', label: 'Verify', icon: '🔍' },
+  { path: '/admin', label: 'Admin & Ops', icon: '🛡️' },
 ];
+
+const pageTitles: Record<string, string> = {
+  '/': 'Overview',
+  '/collector': 'Collector Dashboard',
+  '/aggregator': 'Aggregator Dashboard',
+  '/lab': 'Quality Lab',
+  '/manufacturer': 'Manufacturer Portal',
+  '/verify': 'Chain Verification',
+  '/admin': 'Protocol Operations & Admin',
+};
+
+type Role = 'ALL' | 'ADMIN' | 'COLLECTOR' | 'AGGREGATOR' | 'LAB' | 'MANUFACTURER' | 'CONSUMER';
 
 export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-
+  const [activeRole, setActiveRole] = useState<Role>('ALL');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showReviewQueue, setShowReviewQueue] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authRoleTarget, setAuthRoleTarget] = useState<StakeholderRole>('COLLECTOR');
 
-  // Multi-tenant authenticated user state from localStorage
+  // Auth State
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeRole, setActiveRole] = useState<string>('GUEST');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [targetAuthRole, setTargetAuthRole] = useState<UserRole>('COLLECTOR');
+
+  const loadUser = () => {
+    try {
+      const stored = localStorage.getItem('mulpath_user');
+      if (stored) {
+        setCurrentUser(JSON.parse(stored));
+      } else {
+        setCurrentUser(null);
+      }
+    } catch (e) {
+      setCurrentUser(null);
+    }
+  };
 
   useEffect(() => {
-    const syncUser = () => {
-      try {
-        const u = localStorage.getItem('mulpath_user');
-        const r = localStorage.getItem('mulpath_role');
-        if (u) setCurrentUser(JSON.parse(u));
-        if (r) setActiveRole(r);
-      } catch (e) { /* ignore */ }
+    loadUser();
+    window.addEventListener('auth-change', loadUser);
+    window.addEventListener('storage', loadUser);
+    return () => {
+      window.removeEventListener('auth-change', loadUser);
+      window.removeEventListener('storage', loadUser);
     };
-    syncUser();
-    window.addEventListener('storage', syncUser);
-    return () => window.removeEventListener('storage', syncUser);
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('mulpath_token');
     localStorage.removeItem('mulpath_user');
-    localStorage.removeItem('mulpath_role');
     setCurrentUser(null);
-    setActiveRole('GUEST');
-    navigate('/');
+    window.dispatchEvent(new Event('auth-change'));
   };
 
-  const openAuth = (role: StakeholderRole = 'COLLECTOR') => {
-    setAuthRoleTarget(role);
-    setShowAuthModal(true);
-    setMobileMenuOpen(false);
+  const openLoginFor = (role: UserRole) => {
+    setTargetAuthRole(role);
+    setAuthModalOpen(true);
   };
 
-  const handleAuthSuccess = (role: StakeholderRole, user: any) => {
-    setCurrentUser(user);
-    setActiveRole(role);
-    if (role === 'COLLECTOR') navigate('/collector');
-    else if (role === 'AGGREGATOR') navigate('/aggregator');
-    else if (role === 'LAB') navigate('/lab');
-    else if (role === 'MANUFACTURER') navigate('/manufacturer');
-    else if (role === 'ADMIN') navigate('/admin');
-    else if (role === 'CONSUMER') navigate('/verify');
+  const getPageTitle = () => {
+    if (currentPath.startsWith('/verify/')) return 'Chain Verification';
+    return pageTitles[currentPath] || 'Dashboard';
   };
+
+  const filteredNavItems = navItems.filter(item => {
+    if (activeRole === 'ALL') return true;
+    if (item.path === '/' || item.path.startsWith('/verify')) return true;
+    if (activeRole === 'ADMIN' && item.path === '/admin') return true;
+    if (activeRole === 'COLLECTOR' && item.path === '/collector') return true;
+    if (activeRole === 'AGGREGATOR' && item.path === '/aggregator') return true;
+    if (activeRole === 'LAB' && item.path === '/lab') return true;
+    if (activeRole === 'MANUFACTURER' && item.path === '/manufacturer') return true;
+    return false;
+  });
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-slate-200 relative flex flex-col selection:bg-emerald-500 selection:text-black">
-      
-      {/* 🌐 Interactive Background Globe Animation */}
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-40 overflow-hidden">
+    <div className="app-root" style={{ pointerEvents: 'none' }}>
+
+      {/* 🌐 Interactive Background Animation */}
+      <div className="bg-animation-layer">
         <iframe
           src={currentPath === '/' ? '/hero-globe/index.html' : '/normal-globe/index.html'}
           title="Interactive Background Globe"
-          className="w-full h-full border-none pointer-events-auto"
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            pointerEvents: 'auto',
+            touchAction: 'none',
+            transform: currentPath === '/' ? 'none' : 'scale(1.35)',
+            transformOrigin: 'center center',
+          }}
           scrolling="no"
         />
       </div>
 
-      {/* ── Top Floating Glassmorphic Navigation Bar ── */}
-      <header className="sticky top-0 z-40 w-full bg-[#050505]/85 backdrop-blur-2xl border-b border-white/10 shadow-2xl transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-4">
-          
-          {/* Logo & Protocol Live Pulse */}
-          <div className="flex items-center gap-3.5">
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/20 to-white/5 p-0.5 border border-white/20 shadow-lg group-hover:scale-105 transition-transform flex items-center justify-center">
-                <img
-                  src="/logo.jpg"
-                  alt="Mūlpath"
-                  className="w-full h-full object-cover rounded-lg"
-                />
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="font-serif text-lg font-black tracking-wider text-white group-hover:text-emerald-300 transition">
-                    MŪLPATH
-                  </span>
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-white/10 text-white border border-white/15">
-                    PROD
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono tracking-tight hidden sm:inline">
-                  Botanical Provenance Protocol
-                </span>
-              </div>
-            </Link>
+      {/* ── Mobile overlay backdrop ── */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-overlay"
+          onClick={closeMobileMenu}
+          style={{ pointerEvents: 'auto' }}
+        />
+      )}
 
-            {/* Sepolia Pulse */}
-            <div className="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-900/80 border border-white/10 text-[11px] font-mono text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>Sepolia Testnet</span>
-            </div>
+      {/* ── Sidebar ── */}
+      <aside
+        className={`sidebar ${mobileMenuOpen ? 'sidebar-open' : ''}`}
+        style={{ zIndex: 30, pointerEvents: 'auto' }}
+      >
+        <div className="sidebar-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '16px 20px' }}>
+          <img
+            src="/logo.jpg"
+            alt="Mūlpath Logo"
+            style={{ width: '100%', maxWidth: '140px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+          />
+          <span className="sidebar-logo-badge" style={{ marginTop: '2px' }}>BETA</span>
+        </div>
+
+        <nav className="sidebar-nav">
+          {filteredNavItems.map((item) => {
+            const isActive = item.path === '/'
+              ? currentPath === '/'
+              : currentPath.startsWith(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`sidebar-link ${isActive ? 'active' : ''}`}
+                onClick={closeMobileMenu}
+              >
+                <span className="sidebar-link-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Network</p>
+            <p style={{ fontSize: '13px', color: '#f8fafc', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255,255,255,0.6)', flexShrink: 0 }}></span>
+              Sepolia Testnet
+            </p>
           </div>
+        </div>
+      </aside>
 
-          {/* Center Navigation Links (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-1">
-            {navItems.map((item) => {
-              const isActive = item.path === '/'
-                ? currentPath === '/'
-                : currentPath.startsWith(item.path);
+      {/* ── Main Content ── */}
+      <main className="app-main" style={{ pointerEvents: 'none' }}>
+        <header className="app-header" style={{ pointerEvents: 'auto' }}>
+          {/* Hamburger button — mobile only */}
+          <button
+            className="hamburger-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle navigation"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
 
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                    isActive
-                      ? 'bg-white/15 text-white shadow-inner border border-white/20'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <span className="text-sm">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <h1 className="app-header-title">{getPageTitle()}</h1>
+          <span className="app-header-breadcrumb hidden-mobile">{currentPath === '/' ? 'Home' : currentPath.slice(1).split('/')[0]}</span>
 
-          {/* Right Action Ribbon: Profile / Sign-in / Review Queue */}
-          <div className="flex items-center gap-2.5">
-            {/* Ops Review Queue Counter */}
+          <div className="ml-auto flex items-center gap-2.5" style={{ pointerEvents: 'auto' }}>
             <button
               onClick={() => setShowReviewQueue(true)}
-              className="bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm"
+              className="bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
               title="Ops Human Review Queue for anti-fraud exceptions"
             >
               <span className="relative flex h-2 w-2">
@@ -155,27 +195,26 @@ export default function MainLayout() {
               <span className="hidden sm:inline">Review Queue</span>
             </button>
 
-            {/* Authenticated Stakeholder Pill or Gateway Button */}
-            {currentUser && activeRole !== 'GUEST' ? (
-              <div className="flex items-center gap-2 bg-slate-900/90 border border-white/15 p-1.5 pl-3 rounded-2xl shadow-md">
-                <div className="text-left hidden sm:block">
-                  <p className="text-[11px] font-bold text-white leading-none">
-                    {currentUser.name || 'Stakeholder'}
-                  </p>
-                  <p className="text-[9px] text-emerald-400 font-mono mt-0.5">
-                    {activeRole} · ₹{currentUser.walletBalance || 0}
-                  </p>
+            {/* Stakeholder Profile or Login Button */}
+            {currentUser ? (
+              <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs">
+                <span className="text-sm">
+                  {currentUser.role === 'COLLECTOR' ? '🌿' : currentUser.role === 'AGGREGATOR' ? '🏭' : currentUser.role === 'LAB' ? '🧪' : currentUser.role === 'MANUFACTURER' ? '💊' : '🛡️'}
+                </span>
+                <div className="hidden sm:block text-left leading-none space-y-0.5">
+                  <p className="font-bold text-white text-[11px] truncate max-w-[120px]">{currentUser.name}</p>
+                  <p className="text-[9px] text-emerald-400 font-mono font-semibold">{currentUser.role}</p>
                 </div>
                 <button
-                  onClick={() => openAuth(activeRole as StakeholderRole)}
-                  className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold transition"
-                  title="Switch Stakeholder Role"
+                  onClick={() => openLoginFor((currentUser.role as UserRole) || 'COLLECTOR')}
+                  className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg border border-slate-700 font-semibold transition ml-1"
+                  title="Switch Active Stakeholder"
                 >
-                  Switch 🔄
+                  Switch
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="px-2 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-300 rounded-xl text-xs font-semibold transition"
+                  className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1 transition"
                   title="Logout"
                 >
                   ✕
@@ -183,80 +222,55 @@ export default function MainLayout() {
               </div>
             ) : (
               <button
-                onClick={() => openAuth('COLLECTOR')}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs rounded-xl shadow-lg hover:shadow-emerald-500/20 transition-all flex items-center gap-1.5 transform active:scale-95"
+                onClick={() => openLoginFor('COLLECTOR')}
+                className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
               >
-                <span>⚡ Access Portals</span>
-                <span>➔</span>
+                <span>🔑</span>
+                <span>Stakeholder Login</span>
               </button>
             )}
 
-            {/* Mobile Menu Toggle */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 rounded-xl bg-slate-900 border border-white/10 text-white hover:bg-slate-800"
-              aria-label="Toggle menu"
+            <select
+              value={activeRole}
+              onChange={e => setActiveRole(e.target.value as Role)}
+              className="role-select text-xs hidden md:block"
             >
-              {mobileMenuOpen ? '✕' : '☰'}
-            </button>
+              <option value="ALL">🌐 All Portals (Auditor)</option>
+              <option value="ADMIN">🛡️ Admin & Ops</option>
+              <option value="COLLECTOR">👨🏽‍🌾 Collector</option>
+              <option value="AGGREGATOR">🏭 Aggregator</option>
+              <option value="LAB">🧪 Quality Lab</option>
+              <option value="MANUFACTURER">💊 Manufacturer</option>
+              <option value="CONSUMER">🔍 Verify (Consumer)</option>
+            </select>
           </div>
+        </header>
+
+        <div className="main-content">
+          <Outlet />
         </div>
-
-        {/* ── Mobile Nav Dropdown ── */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden bg-slate-950/95 border-b border-white/10 px-4 py-4 space-y-2 backdrop-blur-2xl">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/10 text-sm font-semibold text-white transition"
-              >
-                <span className="text-lg">{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            ))}
-            <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
-              <button
-                onClick={() => openAuth('COLLECTOR')}
-                className="w-full py-2.5 bg-emerald-500 text-slate-950 rounded-xl font-bold text-xs text-center"
-              >
-                ⚡ Open Role Gateway & Sign In
-              </button>
-            </div>
-          </div>
-        )}
-      </header>
-
-      {/* ── Main Content Container ── */}
-      <main className="flex-1 relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <Outlet />
       </main>
 
-      {/* ── Minimalist Clean Footer ── */}
-      <footer className="relative z-10 border-t border-white/5 py-6 text-center text-xs text-slate-500 bg-[#050505]/90 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© 2026 Mūlpath Protocol. Decentralized Botanical Traceability & Fair-Trade Settlement.</p>
-          <div className="flex gap-4 font-mono text-[11px] text-slate-400">
-            <a href="https://sepolia.etherscan.io/address/0xa5c3D7BB4C52Ed17dCF5De132e01141b3cD0295D" target="_blank" rel="noreferrer" className="hover:text-emerald-400">
-              Sepolia Contract ↗
-            </a>
-            <a href="/verify" className="hover:text-emerald-400">Public Consumer Audit ↗</a>
-          </div>
-        </div>
-      </footer>
+      {/* Unified Role Gateway Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        initialRole={targetAuthRole}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={(user) => {
+          setAuthModalOpen(false);
+          loadUser();
+          if (user.role === 'COLLECTOR') navigate('/collector');
+          else if (user.role === 'AGGREGATOR') navigate('/aggregator');
+          else if (user.role === 'LAB') navigate('/lab');
+          else if (user.role === 'MANUFACTURER') navigate('/manufacturer');
+          else if (user.role === 'ADMIN') navigate('/admin');
+        }}
+      />
 
-      {/* Cross-Cutting Modals */}
+      {/* Cross-Cutting Ops Review Queue Modal */}
       <ReviewQueueModal
         isOpen={showReviewQueue}
         onClose={() => setShowReviewQueue(false)}
-      />
-
-      <AuthModal
-        isOpen={showAuthModal}
-        initialRole={authRoleTarget}
-        onClose={() => setShowAuthModal(false)}
-        onSuccess={handleAuthSuccess}
       />
     </div>
   );

@@ -3,125 +3,119 @@ import { Button } from './Button';
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
 
-export type StakeholderRole = 'COLLECTOR' | 'AGGREGATOR' | 'LAB' | 'MANUFACTURER' | 'ADMIN' | 'CONSUMER';
+export type UserRole = 'COLLECTOR' | 'AGGREGATOR' | 'LAB' | 'MANUFACTURER' | 'ADMIN';
 
 interface AuthModalProps {
   isOpen: boolean;
+  initialRole?: UserRole;
   onClose: () => void;
-  initialRole?: StakeholderRole;
-  onSuccess?: (role: StakeholderRole, user: any, token: string) => void;
+  onSuccess: (user: any) => void;
 }
+
+const roleDescriptions: Record<UserRole, { title: string; icon: string; desc: string; sampleName: string; defaultPhone: string }> = {
+  COLLECTOR: {
+    title: 'Botanical Harvester',
+    icon: '🌿',
+    desc: 'Log wild harvests with GPS geofencing, PlantNet AI vision, and receive instant ERC-4337 payouts.',
+    sampleName: 'Ramesh Patel',
+    defaultPhone: '9876543210'
+  },
+  AGGREGATOR: {
+    title: 'Mandi Depot Aggregator',
+    icon: '🏭',
+    desc: 'Receive assigned field bags, verify scale weights, and dispatch NFC sealed vials to testing labs.',
+    sampleName: 'Shakti Enterprises Mandi',
+    defaultPhone: '9876543211'
+  },
+  LAB: {
+    title: 'NABL Quality Lab',
+    icon: '🧪',
+    desc: 'Receive assigned sample vials, perform HPLC chemical purity assays, and anchor certificates on-chain.',
+    sampleName: 'Ayush Analytical Labs',
+    defaultPhone: '9876543212'
+  },
+  MANUFACTURER: {
+    title: 'Herbal Manufacturer',
+    icon: '💊',
+    desc: 'Purchase certified lots, formulate retail blends, and generate tamper-proof consumer QR codes.',
+    sampleName: 'Dabur Organic Formulations',
+    defaultPhone: '9876543213'
+  },
+  ADMIN: {
+    title: 'Protocol Operations & Admin',
+    icon: '🛡️',
+    desc: 'Global supply chain telemetry, anti-fraud queue resolution, and Ethereum Sepolia contracts audit.',
+    sampleName: 'Mūlpath Protocol Auditor',
+    defaultPhone: '9876543214'
+  }
+};
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
-  onClose,
   initialRole = 'COLLECTOR',
+  onClose,
   onSuccess
 }) => {
-  const [selectedRole, setSelectedRole] = useState<StakeholderRole>(initialRole);
-  const [step, setStep] = useState<'ROLE_SELECT' | 'PHONE' | 'OTP'>('ROLE_SELECT');
-  const [phone, setPhone] = useState('');
+  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
+  const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
+  const [phone, setPhone] = useState(roleDescriptions[initialRole].defaultPhone);
+  const [userName, setUserName] = useState(roleDescriptions[initialRole].sampleName);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [resendTimer, setResendTimer] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [resendTimer, setResendTimer] = useState(30);
 
   useEffect(() => {
-    if (initialRole && isOpen) {
+    if (initialRole) {
       setSelectedRole(initialRole);
+      setPhone(roleDescriptions[initialRole].defaultPhone);
+      setUserName(roleDescriptions[initialRole].sampleName);
     }
   }, [initialRole, isOpen]);
 
   useEffect(() => {
-    let interval: any;
-    if (resendTimer > 0) {
-      interval = setInterval(() => setResendTimer(t => t - 1), 1000);
+    let timer: any;
+    if (step === 'OTP' && resendTimer > 0) {
+      timer = setInterval(() => setResendTimer(prev => prev - 1), 1000);
     }
-    return () => clearInterval(interval);
-  }, [resendTimer]);
+    return () => clearInterval(timer);
+  }, [step, resendTimer]);
 
   if (!isOpen) return null;
 
-  const roleDetails: Record<StakeholderRole, { title: string; icon: string; desc: string; defaultPhone: string; defaultName: string }> = {
-    COLLECTOR: {
-      title: 'Botanical Collector / Harvester',
-      icon: '🌿',
-      desc: 'Log GPS field harvests, camera AI species scans, and receive instant direct payments to your smart wallet.',
-      defaultPhone: '9876543210',
-      defaultName: 'Ramesh Patel (Chittorgarh Forest Reserve)'
-    },
-    AGGREGATOR: {
-      title: 'Mandi Aggregator & Depot Hub',
-      icon: '🏭',
-      desc: 'Verify gross scale weights, manage temperature-controlled drying/grinding, and dispatch sealed sample vials.',
-      defaultPhone: '9829012345',
-      defaultName: 'Shakti Enterprises (Chittorgarh Mandi)'
-    },
-    LAB: {
-      title: 'Quality Testing Laboratory',
-      icon: '🧪',
-      desc: 'Conduct HPLC chromatography assays, verify active potency (Withanolide A), and anchor SHA-256 certs on Sepolia.',
-      defaultPhone: '9829099887',
-      defaultName: 'Ayush National Quality HPLC Lab'
-    },
-    MANUFACTURER: {
-      title: 'Ayurvedic Brand Manufacturer',
-      icon: '💊',
-      desc: 'Acquire certified lots, blend formulations, calculate farmer revenue shares, and print serialized consumer QR codes.',
-      defaultPhone: '9829077665',
-      defaultName: 'Mūlpath Certified Organic Labs'
-    },
-    ADMIN: {
-      title: 'Protocol Operations & Auditor',
-      icon: '🛡️',
-      desc: 'Global supply chain telemetry, geofence boundary editor, smart contract state audit, and anti-fraud operations.',
-      defaultPhone: '9829000001',
-      defaultName: 'Protocol Security Auditor'
-    },
-    CONSUMER: {
-      title: 'Consumer Public Verification',
-      icon: '🔍',
-      desc: 'Instant cryptographic passport audit without login.',
-      defaultPhone: '',
-      defaultName: 'Guest'
-    }
-  };
-
-  const handleRoleSelect = (role: StakeholderRole) => {
+  const handleRoleSelect = (role: UserRole) => {
     setSelectedRole(role);
-    if (role === 'CONSUMER') {
-      onClose();
-      return;
-    }
-    // Set typical stakeholder phone
-    setPhone(roleDetails[role].defaultPhone);
-    setStep('PHONE');
+    setPhone(roleDescriptions[role].defaultPhone);
+    setUserName(roleDescriptions[role].sampleName);
+    setErrorMsg('');
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.length < 10) {
-      setErrorMessage('Please enter a valid 10-digit mobile number.');
+    setErrorMsg('');
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
-    setIsLoading(true);
-    setErrorMessage('');
 
+    setIsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, name: roleDetails[selectedRole].defaultName, role: selectedRole })
+        body: JSON.stringify({ phone: cleanPhone })
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        setStep('OTP');
-        setResendTimer(30);
-      } else {
-        setErrorMessage(data.error || 'Failed to send OTP code.');
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send OTP');
       }
+
+      setStep('OTP');
+      setResendTimer(30);
+      setOtp(['', '', '', '', '', '']);
     } catch (err: any) {
-      setErrorMessage('Network error connecting to auth server.');
+      setErrorMsg(err.message || 'Error connecting to authentication server.');
     } finally {
       setIsLoading(false);
     }
@@ -133,236 +127,237 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     newOtp[index] = val.slice(-1);
     setOtp(newOtp);
 
-    // Auto-advance
     if (val && index < 5) {
-      const nextInput = document.getElementById(`modal-otp-${index + 1}`);
+      const nextInput = document.getElementById(`modal-otp-digit-${index + 1}`);
       nextInput?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      const prevInput = document.getElementById(`modal-otp-digit-${index - 1}`);
+      prevInput?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted) {
+      const newOtp = [...otp];
+      for (let i = 0; i < 6; i++) {
+        newOtp[i] = pasted[i] || '';
+      }
+      setOtp(newOtp);
     }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const otpCode = otp.join('');
-    if (otpCode.length !== 6) {
-      setErrorMessage('Please enter all 6 digits of the OTP.');
+    setErrorMsg('');
+    const fullOtp = otp.join('');
+    if (fullOtp.length !== 6) {
+      setErrorMsg('Please enter all 6 digits of your OTP.');
       return;
     }
 
     setIsLoading(true);
-    setErrorMessage('');
-
     try {
+      const cleanPhone = phone.replace(/\D/g, '');
       const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp: otpCode, role: selectedRole })
+        body: JSON.stringify({
+          phone: cleanPhone,
+          otp: fullOtp,
+          name: userName,
+          role: selectedRole
+        })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        // Save to localStorage for persistent multi-tenant session
-        localStorage.setItem('mulpath_token', data.token);
-        localStorage.setItem('mulpath_user', JSON.stringify(data.user));
-        localStorage.setItem('mulpath_role', selectedRole);
 
-        if (onSuccess) {
-          onSuccess(selectedRole, data.user, data.token);
-        }
-        onClose();
-      } else {
-        setErrorMessage(data.error || 'Invalid OTP code.');
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Invalid OTP code.');
       }
-    } catch (err) {
-      setErrorMessage('Verification failed. Please check connection.');
+
+      if (data.token) {
+        localStorage.setItem('mulpath_token', data.token);
+      }
+      if (data.user) {
+        localStorage.setItem('mulpath_user', JSON.stringify(data.user));
+        window.dispatchEvent(new Event('auth-change'));
+        onSuccess(data.user);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Verification failed.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="modal-backdrop z-50">
-      <div className="modal-content max-w-xl p-6 sm:p-8 bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+      <div className="relative w-full max-w-lg rounded-3xl bg-slate-950/95 border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100">
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg font-bold w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800"
+          className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 transition"
         >
           ✕
         </button>
 
-        {/* ── STEP 1: ROLE SELECTION ── */}
-        {step === 'ROLE_SELECT' && (
-          <div className="space-y-5">
-            <div className="text-center space-y-1.5">
-              <span className="text-3xl block">🌐</span>
-              <h3 className="text-2xl font-black text-white">Select Stakeholder Portal</h3>
-              <p className="text-xs text-slate-400">
-                Choose your role in the Ayurvedic supply chain to access your cryptographic workspace.
-              </p>
-            </div>
+        {/* Modal Header */}
+        <div className="space-y-1 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl mx-auto border border-emerald-500/30">
+            {roleDescriptions[selectedRole].icon}
+          </div>
+          <h3 className="text-xl font-black text-white tracking-tight">
+            Stakeholder Gateway & Login
+          </h3>
+          <p className="text-xs text-slate-400">
+            Authenticate to access your role-isolated cryptographic workspace.
+          </p>
+        </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              {(Object.keys(roleDetails) as StakeholderRole[]).filter(r => r !== 'CONSUMER').map(roleKey => {
-                const r = roleDetails[roleKey];
+        {/* Role Selection Tabs */}
+        {step === 'PHONE' && (
+          <div className="space-y-3">
+            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              1. Select Your Role:
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {(['COLLECTOR', 'AGGREGATOR', 'LAB', 'MANUFACTURER', 'ADMIN'] as UserRole[]).map((r) => {
+                const info = roleDescriptions[r];
+                const isSel = selectedRole === r;
                 return (
                   <button
-                    key={roleKey}
-                    onClick={() => handleRoleSelect(roleKey)}
-                    className={`p-4 rounded-2xl border text-left transition space-y-2 group ${
-                      selectedRole === roleKey
-                        ? 'bg-emerald-500/10 border-emerald-500/50 shadow-md'
-                        : 'bg-slate-900/60 border-slate-800 hover:bg-slate-850 hover:border-slate-700'
+                    key={r}
+                    type="button"
+                    onClick={() => handleRoleSelect(r)}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition ${
+                      isSel
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-white shadow-sm'
+                        : 'bg-slate-900/60 border-slate-800/80 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl">{r.icon}</span>
-                      <span className="text-[10px] uppercase tracking-wider font-mono text-emerald-400 font-bold opacity-0 group-hover:opacity-100 transition">
-                        Select ➔
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition">
-                        {r.title}
-                      </h4>
-                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                        {r.desc}
-                      </p>
+                    <span className="text-xl">{info.icon}</span>
+                    <div className="overflow-hidden">
+                      <p className="font-bold text-xs truncate leading-tight">{info.title.split(' ')[0]}</p>
+                      <p className="text-[9px] text-slate-400 truncate">{r}</p>
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            <div className="pt-2 text-center">
-              <p className="text-xs text-slate-400">
-                Consumer verifying a product bottle?{' '}
-                <a href="/verify" onClick={(e) => { e.preventDefault(); window.location.href = '/verify'; }} className="text-emerald-400 font-semibold hover:underline">
-                  Open Public Scanner (No login required) ➔
-                </a>
-              </p>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800/80 text-xs text-slate-300">
+              <span className="text-emerald-400 font-bold">{roleDescriptions[selectedRole].title}: </span>
+              <span>{roleDescriptions[selectedRole].desc}</span>
             </div>
           </div>
         )}
 
-        {/* ── STEP 2: PHONE INPUT ── */}
-        {step === 'PHONE' && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 pb-2 border-b border-slate-800">
-              <span className="text-3xl">{roleDetails[selectedRole].icon}</span>
+        {/* Form Inputs */}
+        {step === 'PHONE' ? (
+          <form onSubmit={handleSendOtp} className="space-y-4">
+            <div className="space-y-3">
               <div>
-                <h3 className="text-lg font-bold text-white">{roleDetails[selectedRole].title}</h3>
-                <p className="text-xs text-slate-400">Authenticate with your mobile number</p>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Stakeholder / Organization Name
+                </label>
+                <input
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  className="input-field text-sm"
+                  placeholder="e.g. Ramesh Patel"
+                  required
+                />
               </div>
-              <button
-                onClick={() => setStep('ROLE_SELECT')}
-                className="ml-auto text-xs text-slate-400 hover:text-white underline font-semibold"
-              >
-                Change Role
-              </button>
-            </div>
 
-            {errorMessage && (
-              <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-red-300 text-xs">
-                ⚠️ {errorMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleSendOtp} className="space-y-4">
               <div>
-                <label className="input-label">Mobile Number</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-3 text-slate-400 font-mono text-sm">🇮🇳 +91</span>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Indian Mobile Number (+91)
+                </label>
+                <div className="flex gap-2">
+                  <span className="px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 font-mono text-sm font-semibold flex items-center">
+                    🇮🇳 +91
+                  </span>
                   <input
                     type="tel"
                     maxLength={10}
                     value={phone}
-                    onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                    className="input-field text-sm font-mono flex-1 tracking-wider"
                     placeholder="9876543210"
-                    className="input-field pl-16 font-mono text-sm tracking-wider"
                     required
-                    autoFocus
                   />
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  A 6-digit cryptographic authentication code will be dispatched.
-                </p>
               </div>
-
-              <div className="flex gap-3 pt-2">
-                <Button variant="secondary" onClick={() => setStep('ROLE_SELECT')} type="button" className="w-1/3">
-                  Back
-                </Button>
-                <Button type="submit" disabled={isLoading || phone.length < 10} className="w-2/3">
-                  {isLoading ? 'Sending Code...' : 'Send OTP Code ➔'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* ── STEP 3: OTP VERIFICATION ── */}
-        {step === 'OTP' && (
-          <div className="space-y-5">
-            <div className="text-center space-y-1">
-              <span className="text-3xl block">🔐</span>
-              <h3 className="text-xl font-bold text-white">Enter 6-Digit Code</h3>
-              <p className="text-xs text-slate-400">
-                Code sent to <span className="text-emerald-400 font-mono font-bold">+91 {phone}</span>
-              </p>
             </div>
 
-            {errorMessage && (
-              <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-red-300 text-xs text-center">
-                ⚠️ {errorMessage}
+            {errorMsg && (
+              <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300 font-semibold">
+                ⚠️ {errorMsg}
               </div>
             )}
 
-            <form onSubmit={handleVerifyOtp} className="space-y-5">
-              <div className="flex justify-center gap-2 sm:gap-3">
-                {otp.map((digit, idx) => (
-                  <input
-                    key={idx}
-                    id={`modal-otp-${idx}`}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={e => handleOtpChange(idx, e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Backspace' && !digit && idx > 0) {
-                        document.getElementById(`modal-otp-${idx - 1}`)?.focus();
-                      }
-                    }}
-                    className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl font-mono font-bold bg-slate-900 border border-slate-700 rounded-xl text-white focus:border-emerald-500 focus:outline-none shadow-inner"
-                    autoFocus={idx === 0}
-                  />
-                ))}
-              </div>
+            <Button type="submit" disabled={isLoading} className="w-full py-3 text-sm font-bold shadow-lg">
+              {isLoading ? 'Requesting OTP...' : 'Send Verification Code ➔'}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="text-center space-y-1">
+              <p className="text-xs text-slate-400">
+                Enter the 6-digit verification code sent to:
+              </p>
+              <p className="font-mono text-sm font-bold text-emerald-400">
+                +91 {phone} <button type="button" onClick={() => setStep('PHONE')} className="text-xs text-slate-400 hover:text-white underline ml-1">Edit</button>
+              </p>
+            </div>
 
-              <div className="flex justify-between items-center text-xs">
+            <div className="flex justify-center gap-2 py-2" onPaste={handleOtpPaste}>
+              {otp.map((digit, idx) => (
+                <input
+                  key={idx}
+                  id={`modal-otp-digit-${idx}`}
+                  type="text"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  className="w-11 h-13 text-center text-xl font-bold font-mono rounded-xl bg-slate-900 border border-slate-700 text-white focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 focus:outline-none"
+                  autoFocus={idx === 0}
+                />
+              ))}
+            </div>
+
+            {errorMsg && (
+              <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300 font-semibold">
+                ⚠️ {errorMsg}
+              </div>
+            )}
+
+            <div className="flex justify-between items-center text-xs text-slate-400 px-1">
+              <span>Didn't receive code?</span>
+              {resendTimer > 0 ? (
+                <span className="font-mono text-slate-500">Resend in {resendTimer}s</span>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => setStep('PHONE')}
-                  className="text-slate-400 hover:text-white underline"
+                  onClick={handleSendOtp}
+                  className="text-emerald-400 font-semibold hover:underline"
                 >
-                  Edit Mobile Number
+                  Resend OTP
                 </button>
-                {resendTimer > 0 ? (
-                  <span className="text-slate-500 font-mono">Resend in {resendTimer}s</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    className="text-emerald-400 hover:underline font-semibold"
-                  >
-                    Resend Code
-                  </button>
-                )}
-              </div>
+              )}
+            </div>
 
-              <Button type="submit" disabled={isLoading || otp.join('').length !== 6} className="w-full py-3 text-sm font-bold">
-                {isLoading ? 'Verifying & Provisioning Wallet...' : 'Authorize & Enter Workspace ➔'}
-              </Button>
-            </form>
-          </div>
+            <Button type="submit" disabled={isLoading} className="w-full py-3 text-sm font-bold shadow-lg">
+              {isLoading ? 'Verifying...' : `Access ${roleDescriptions[selectedRole].title} Workspace ➔`}
+            </Button>
+          </form>
         )}
       </div>
     </div>
