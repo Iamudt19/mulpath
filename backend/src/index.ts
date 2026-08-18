@@ -6,9 +6,13 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import QRCode from 'qrcode';
+import { ethers } from 'ethers';
 
 dotenv.config();
+
+const contractAddresses = JSON.parse(fs.readFileSync(new URL('./contractAddresses.json', import.meta.url), 'utf-8'));
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -1136,31 +1140,29 @@ app.post('/api/formulations', async (req: Request, res: Response): Promise<any> 
 
     // Write to blockchain
     let onChainTxHash: string | null = null;
-    const contractAddr = contractAddresses.FormulationRegistry || contractAddresses.HarvestRegistry || '0xa5c3D7BB4C52Ed17dCF5De132e01141b3cD0295D';
+    const contractAddr = contractAddresses.FormulationRegistry || '0x7B1f5793f99Da12E62F22cDdd3a350a35C31df25';
+    const privateKey = process.env.PRIVATE_KEY;
+    const rpcUrl = process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org';
 
-    try {
-      if (contractAddresses.FormulationRegistry) {
+    if (privateKey) {
+      try {
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const wallet = new ethers.Wallet(privateKey, provider);
+        const formulationAbi = [
+          "function registerFormulation(uint256 _formulationId, string memory _name, string[] memory _sourceBatchIds, string memory _qrCodeUrl) external"
+        ];
+        const contract = new ethers.Contract(contractAddr, formulationAbi, wallet);
         const stringIds = ids.map(id => id.toString());
-        const tx = await (formulationRegistry as any).registerFormulation(formulation.id, name, stringIds, `/uploads/qr/formulation-${formulation.id}.png`);
+        const tx = await contract.registerFormulation(
+          formulation.id,
+          name,
+          stringIds,
+          `https://mulpath.vercel.app/verify/${formulation.id}`
+        );
         onChainTxHash = tx.hash;
         console.log(`[BLOCKCHAIN] Anchored Formulation on Sepolia via FormulationRegistry: ${tx.hash}`);
-      }
-    } catch (bcError) {
-      console.warn("Primary formulation contract relayed, using HarvestRegistry anchor fallback:", bcError);
-      try {
-        if (contractAddresses.HarvestRegistry) {
-          const payloadHash = ethers.keccak256(ethers.toUtf8Bytes(`FORMULATION:${formulation.id}:${name}:${Date.now()}`));
-          const tx = await (harvestRegistry as any).registerHarvest(
-            `FORM-${formulation.id}`,
-            name.slice(0, 31),
-            payloadHash,
-            true
-          );
-          onChainTxHash = tx.hash;
-          console.log(`[BLOCKCHAIN] Anchored Formulation on Sepolia via HarvestRegistry fallback: ${tx.hash}`);
-        }
-      } catch (fErr) {
-        console.warn("Sepolia transaction relayed:", fErr);
+      } catch (bcError: any) {
+        console.warn("[BLOCKCHAIN] Direct transaction relay notice:", bcError?.message);
       }
     }
 
@@ -1173,17 +1175,19 @@ app.post('/api/formulations', async (req: Request, res: Response): Promise<any> 
           contractAddress: contractAddr
         }
       }).catch(() => {});
-    }
 
-    if (!onChainTxHash) {
-      onChainTxHash = `0x${Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')}`;
+      await prisma.formulation.update({
+        where: { id: formulation.id },
+        data: { txHash: onChainTxHash }
+      }).catch(() => {});
     }
 
     return res.status(201).json({ 
       success: true, 
       formulation: updated,
       txHash: onChainTxHash,
-      contractAddress: contractAddr
+      contractAddress: contractAddr,
+      contractUrl: `https://sepolia.etherscan.io/address/${contractAddr}`
     });
   } catch (error) {
     console.error(error);

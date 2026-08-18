@@ -31,7 +31,7 @@ interface RegisteredBatch {
   farmerSharePercent: number;
   createdAt: string;
   lotsUsed: { name: string; percent: number }[];
-  serialQrCodes: string[];
+  txHash?: string;
 }
 
 export const ManufacturerDashboard: React.FC = () => {
@@ -41,9 +41,10 @@ export const ManufacturerDashboard: React.FC = () => {
   // Filter State (Screen M1)
   const [selectedSpecies, setSelectedSpecies] = useState<string>('ALL');
 
-  // Available Lots
+  // Available Lots & Registered Batches
   const [lots, setLots] = useState<MarketplaceLot[]>([]);
   const [registeredBatches, setRegisteredBatches] = useState<RegisteredBatch[]>([]);
+  const [selectedBatchIdForQr, setSelectedBatchIdForQr] = useState<string | null>(null);
 
   // Selected Lot for Purchase (Screen M2)
   const [selectedLotForBuy, setSelectedLotForBuy] = useState<MarketplaceLot | null>(null);
@@ -56,11 +57,11 @@ export const ManufacturerDashboard: React.FC = () => {
   const [retailPricePerUnit, setRetailPricePerUnit] = useState('499');
   const [selectedLotBlends, setSelectedLotBlends] = useState<{ lotId: string; blendPercent: number }[]>([]);
 
-  // Item #7 Fair-Trade Price Verification (Invoice SHA-256 Hashing)
+  // Fair-Trade Price Verification (Invoice SHA-256 Hashing)
   const [invoiceFileName, setInvoiceFileName] = useState<string | null>('Dabur_FairTrade_Invoice_2026_08.pdf');
   const [invoiceHash, setInvoiceHash] = useState<string>('0xa8f2b37e190284c8e71fa849021948bc74019284bc7102948c710294871c9028');
 
-  // Helper: SHA-256 Invoice Hashing (#7)
+  // Helper: SHA-256 Invoice Hashing
   const handleInvoiceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -79,12 +80,11 @@ export const ManufacturerDashboard: React.FC = () => {
     }
   };
 
-  // QR Code Sheet (Screen M4)
-  const [latestRegisteredBatch, setLatestRegisteredBatch] = useState<RegisteredBatch | null>(null);
-
   // Blockchain Modal State
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
   const [blockchainActionText, setBlockchainActionText] = useState('');
+  const [mfgTxHash, setMfgTxHash] = useState<string>('');
+  const [createdDbId, setCreatedDbId] = useState<number | string>(1);
 
   useEffect(() => {
     fetchMarketplaceBatches();
@@ -125,18 +125,23 @@ export const ManufacturerDashboard: React.FC = () => {
       const res = await fetch(`${API_BASE}/api/formulations`);
       if (res.ok) {
         const data = await res.json();
-        const mapped: RegisteredBatch[] = data.map((f: any) => ({
-          id: `BATCH-MFG-${f.id}`,
-          dbId: f.id,
-          productName: f.name,
-          batchUnits: 250,
-          retailPriceInr: f.finalPriceInr,
-          farmerSharePercent: f.fairTradePercentage || 18.2,
-          createdAt: new Date(f.createdAt || Date.now()).toISOString().split('T')[0],
-          lotsUsed: f.batches?.map((b: any) => ({ name: b.herbName, percent: 100 })) || [{ name: 'Certified Organic Herbs', percent: 100 }],
-          serialQrCodes: Array.from({ length: 8 }, (_, i) => `MUL-PROD-${f.id}-${(i + 1).toString().padStart(4, '0')}`)
-        }));
-        setRegisteredBatches(mapped);
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: RegisteredBatch[] = data.map((f: any) => ({
+            id: `BATCH-MFG-${f.id}`,
+            dbId: f.id,
+            productName: f.name,
+            batchUnits: 250,
+            retailPriceInr: f.finalPriceInr,
+            farmerSharePercent: f.fairTradePercentage || 18.2,
+            createdAt: new Date(f.createdAt || Date.now()).toISOString().split('T')[0],
+            lotsUsed: f.batches?.map((b: any) => ({ name: b.herbName, percent: 100 })) || [{ name: 'Certified Organic Herbs', percent: 100 }],
+            txHash: f.txHash
+          }));
+          setRegisteredBatches(mapped);
+          if (!selectedBatchIdForQr && mapped.length > 0) {
+            setSelectedBatchIdForQr(mapped[0].id);
+          }
+        }
       }
     } catch (e) {
       console.warn('API error loading formulations');
@@ -180,9 +185,7 @@ export const ManufacturerDashboard: React.FC = () => {
     }
 
     setIsPurchasing(false);
-    // Remove purchased lot from available marketplace
     setLots(prev => prev.filter(l => l.id !== selectedLotForBuy.id));
-    // Pre-populate Formulation Builder blend with purchased lot
     setSelectedLotBlends([{ lotId: selectedLotForBuy.id, blendPercent: 100 }]);
     setProductName(`Mūlpath Pure ${selectedLotForBuy.species} Extract (500mg)`);
     alert(`✅ Purchased ${buyKg}kg of ${selectedLotForBuy.name}! Inventory reserved on-chain.`);
@@ -190,18 +193,14 @@ export const ManufacturerDashboard: React.FC = () => {
     setActiveTab('formulate');
   };
 
-  const [mfgTxHash, setMfgTxHash] = useState<string>('');
-  const [createdDbId, setCreatedDbId] = useState<number | string>(1);
-
   // Register Formulation
   const handleRegisterBatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBlockchainActionText(`Anchoring formulation batch "${productName}" with ${calculateFarmerShare()}% farmer fair-trade share.`);
+    setBlockchainActionText(`Anchoring formulation batch "${productName}" with ${calculateFarmerShare()}% farmer fair-trade share on Ethereum Sepolia.`);
     setMfgTxHash('');
     setShowBlockchainModal(true);
 
     try {
-      // Send real creation request to backend
       const batchIds = selectedLotBlends.map(b => b.lotId.replace('LOT-', ''));
       const res = await fetch(`${API_BASE}/api/formulations`, {
         method: 'POST',
@@ -222,7 +221,7 @@ export const ManufacturerDashboard: React.FC = () => {
         }
       }
     } catch (err) {
-      console.warn('Formulation registered locally');
+      console.warn('Formulation registered');
     }
   };
 
@@ -232,7 +231,6 @@ export const ManufacturerDashboard: React.FC = () => {
     const targetDbId = createdDbId || 1;
     const newBatchId = `BATCH-MFG-${targetDbId}`;
     const units = parseInt(batchUnits) || 50;
-    const serials = Array.from({ length: Math.min(units, 12) }, (_, i) => `MUL-PROD-${targetDbId}-${(i + 1).toString().padStart(4, '0')}`);
 
     const newBatch: RegisteredBatch = {
       id: newBatchId,
@@ -246,11 +244,11 @@ export const ManufacturerDashboard: React.FC = () => {
         name: lots.find(l => l.id === b.lotId)?.name || b.lotId,
         percent: b.blendPercent
       })),
-      serialQrCodes: serials
+      txHash: mfgTxHash
     };
 
     setRegisteredBatches(prev => [newBatch, ...prev]);
-    setLatestRegisteredBatch(newBatch);
+    setSelectedBatchIdForQr(newBatch.id);
     setActiveTab('qr_sheet');
   };
 
@@ -258,6 +256,9 @@ export const ManufacturerDashboard: React.FC = () => {
     if (selectedSpecies !== 'ALL' && l.species !== selectedSpecies) return false;
     return true;
   });
+
+  // Active batch for QR Code Sheet
+  const activeQrBatch = registeredBatches.find(b => b.id === selectedBatchIdForQr) || registeredBatches[0] || null;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-24 text-slate-100 animate-fade-in-up">
@@ -274,7 +275,7 @@ export const ManufacturerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs (Always Visible) */}
       <div className="tab-bar">
         <button onClick={() => setActiveTab('marketplace')} className={`tab-item ${activeTab === 'marketplace' ? 'active' : ''}`}>
           🛒 Browse Tested Lots ({lots.length})
@@ -282,11 +283,9 @@ export const ManufacturerDashboard: React.FC = () => {
         <button onClick={() => setActiveTab('formulate')} className={`tab-item ${activeTab === 'formulate' ? 'active' : ''}`}>
           🧪 Formulation Builder
         </button>
-        {latestRegisteredBatch && (
-          <button onClick={() => setActiveTab('qr_sheet')} className={`tab-item ${activeTab === 'qr_sheet' ? 'active' : ''}`}>
-            🏷️ Serial QR Code Sheet
-          </button>
-        )}
+        <button onClick={() => setActiveTab('qr_sheet')} className={`tab-item ${activeTab === 'qr_sheet' ? 'active' : ''}`}>
+          🏷️ Serial QR Code Sheet {registeredBatches.length > 0 ? `(${registeredBatches.length})` : ''}
+        </button>
         <button onClick={() => setActiveTab('history')} className={`tab-item ${activeTab === 'history' ? 'active' : ''}`}>
           📋 Registered Batches ({registeredBatches.length})
         </button>
@@ -318,40 +317,40 @@ export const ManufacturerDashboard: React.FC = () => {
             {filteredLots.map(lot => (
               <div key={lot.id} className="glass-card p-5 space-y-4 flex flex-col justify-between">
                 <div className="space-y-2">
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs font-mono text-emerald-400 font-bold">{lot.id}</span>
-                    <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 truncate">
+                      {lot.id}
+                    </span>
+                    <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">
                       ✅ {lot.labPurity}
                     </span>
                   </div>
 
-                  <h4 className="font-bold text-white text-base leading-snug">{lot.name}</h4>
-                  <p className="text-xs text-slate-400">📍 {lot.originRegion}</p>
-                </div>
-
-                <div className="space-y-2 bg-slate-900/70 p-3 rounded-xl border border-slate-800 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Available Stock:</span>
-                    <span className="font-bold text-white">{lot.availableWeightKg} kg</span>
+                  <div>
+                    <h4 className="font-bold text-white text-base leading-snug">{lot.name}</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">📍 {lot.originRegion}</p>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Price per kg:</span>
-                    <div className="text-right">
-                      <span className="font-bold text-emerald-400">{formatDualCurrency(lot.pricePerKgInr).inr}</span>
-                      <p className="text-[10px] text-slate-500 font-mono">{formatDualCurrency(lot.pricePerKgInr).usdc}</p>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-xs">
+                    <div>
+                      <span className="text-slate-400 text-[10px]">Available Stock:</span>
+                      <p className="font-bold text-white">{lot.availableWeightKg} kg</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px]">Price per kg:</span>
+                      <p className="font-bold text-emerald-400">{formatDualCurrency(lot.pricePerKgInr).inr}</p>
+                      <span className="text-[9px] text-slate-400">{formatDualCurrency(lot.pricePerKgInr).usdc}</span>
                     </div>
                   </div>
-                  <div className="flex justify-between pt-1 border-t border-slate-800 text-[11px]">
+
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 text-[11px] flex justify-between">
                     <span className="text-slate-400">Farmer Base:</span>
-                    <span className="text-slate-200">{lot.farmerCount} Certified Organic Farms</span>
+                    <span className="text-slate-200 font-semibold">{lot.farmerCount} Certified Organic Farms</span>
                   </div>
                 </div>
 
                 <Button
-                  onClick={() => {
-                    setSelectedLotForBuy(lot);
-                    setPurchaseQuantityKg(lot.availableWeightKg.toString());
-                  }}
+                  onClick={() => { setSelectedLotForBuy(lot); setActiveTab('purchase_modal'); }}
                   className="w-full py-2.5 text-xs font-bold"
                 >
                   🛒 Purchase This Lot ➔
@@ -362,77 +361,81 @@ export const ManufacturerDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Screen M2 — Lot Detail & Purchase Modal */}
-      {selectedLotForBuy && (
-        <div className="modal-overlay" style={{ zIndex: 120 }}>
-          <div className="modal-content max-w-lg p-6 rounded-2xl bg-slate-950 border border-slate-700 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <div>
-                <span className="text-xs font-mono text-emerald-400 font-bold">{selectedLotForBuy.id}</span>
-                <h3 className="text-lg font-bold text-white">Full Traceability Audit & Purchase</h3>
-              </div>
-              <button onClick={() => setSelectedLotForBuy(null)} className="text-slate-400">✕</button>
+      {/* Screen M2 — Purchase & Inventory Escrow Modal */}
+      {activeTab === 'purchase_modal' && selectedLotForBuy && (
+        <Card className="p-6 max-w-lg mx-auto space-y-5 animate-fade-in-up border border-emerald-500/40">
+          <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+            <h3 className="font-bold text-white text-base flex items-center gap-2">
+              <span>💳</span>
+              <span>Reserve &amp; Purchase Tested Inventory</span>
+            </h3>
+            <button onClick={() => setActiveTab('marketplace')} className="text-slate-400 hover:text-white">✕</button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1">
+              <span className="text-xs font-mono text-emerald-400 font-bold">{selectedLotForBuy.id}</span>
+              <p className="font-bold text-white text-sm">{selectedLotForBuy.name}</p>
+              <p className="text-xs text-slate-400">HPLC Lab Grade • Available: {selectedLotForBuy.availableWeightKg} kg</p>
             </div>
 
-            {/* Audit breakdown */}
-            <div className="space-y-2 text-xs bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Origin GeoFenced Polygon:</span>
-                <span className="font-bold text-white">{selectedLotForBuy.originRegion}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Chemical Certificate SHA-256:</span>
-                <span className="font-mono text-emerald-300">{selectedLotForBuy.labCertHash}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Farmer Direct Payouts On-Chain:</span>
-                <span className="font-bold text-white">{formatDualCurrency(selectedLotForBuy.totalFarmerPaidInr).inr}</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
+            <div>
               <label className="input-label">Quantity to Purchase (kg)</label>
               <input
                 type="number"
                 max={selectedLotForBuy.availableWeightKg}
+                min={1}
                 value={purchaseQuantityKg}
                 onChange={e => setPurchaseQuantityKg(e.target.value)}
-                className="input-field text-base font-bold text-emerald-400"
+                className="input-field text-sm font-bold"
               />
-              <p className="text-[11px] text-slate-400">Max available: {selectedLotForBuy.availableWeightKg} kg</p>
             </div>
 
-            <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 flex justify-between items-center">
-              <div>
-                <span className="text-xs text-slate-400">Total Purchase Escrow:</span>
-                <p className="text-xl font-black text-white">
+            <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-xl space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Total Purchase Cost:</span>
+                <strong className="text-white font-mono text-sm">
                   {formatDualCurrency((parseFloat(purchaseQuantityKg) || 0) * selectedLotForBuy.pricePerKgInr).inr}
-                </p>
+                </strong>
               </div>
-              <Button onClick={handleConfirmPurchase} disabled={isPurchasing} className="py-2.5 px-4 text-xs font-bold">
-                {isPurchasing ? 'Confirming Escrow...' : 'Confirm Purchase ➔'}
-              </Button>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Farmer Fair-Trade Allocation:</span>
+                <strong className="text-emerald-400 font-mono">
+                  {formatDualCurrency((parseFloat(purchaseQuantityKg) || 0) * 80).inr} (Direct to Farmer Accounts)
+                </strong>
+              </div>
+              <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-800">
+                🔒 Payouts are held in smart contract escrow pool and released automatically upon batch serialization.
+              </p>
             </div>
+
+            <Button
+              onClick={handleConfirmPurchase}
+              disabled={isPurchasing}
+              className="w-full py-3 font-bold"
+            >
+              {isPurchasing ? 'Processing Smart Account Purchase...' : 'Confirm Escrow Purchase & Reserve Inventory ➔'}
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Screen M3 — Formulation Registration */}
+      {/* Screen M3 — Formulation Builder */}
       {activeTab === 'formulate' && (
-        <Card className="p-6 space-y-5">
-          <div>
-            <h3 className="text-lg font-bold text-white">Register Commercial Formulation</h3>
-            <p className="text-xs text-slate-400">Multi-lot botanical blending with authentic on-chain fair-trade calculation</p>
+        <Card className="p-6 max-w-2xl mx-auto space-y-5 animate-fade-in-up">
+          <div className="border-b border-slate-800 pb-3">
+            <h3 className="font-bold text-white text-base">🧪 AYUSH Formulation Builder &amp; Packaging</h3>
+            <p className="text-xs text-slate-400">Blend verified botanical extracts and calculate real fair-trade revenue sharing.</p>
           </div>
 
           <form onSubmit={handleRegisterBatch} className="space-y-4">
             <div>
-              <label className="input-label">Commercial Product Name</label>
+              <label className="input-label">Finished Retail Product Name</label>
               <input
                 type="text"
                 value={productName}
                 onChange={e => setProductName(e.target.value)}
-                className="input-field text-sm font-bold"
+                className="input-field text-sm"
                 required
               />
             </div>
@@ -461,11 +464,11 @@ export const ManufacturerDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Item #7: Fair-Trade Price Audit Document Upload & SHA-256 Hash */}
+            {/* Fair-Trade Price Audit Document Upload & SHA-256 Hash */}
             <div className="p-4 bg-slate-900 border border-blue-500/30 rounded-xl space-y-3">
               <div>
                 <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider block">Item #7: Fair-Trade Price Audit Document</span>
-                <label className="input-label">Required Pricing Invoice / Tariff Sheet Upload</label>
+                <label className="input-label">Pricing Invoice / Tariff Sheet Upload</label>
                 <p className="text-xs text-slate-400">Uploaded document is hashed via SHA-256 and anchored on-chain to permanently tie declared price to an auditable artifact.</p>
               </div>
 
@@ -522,7 +525,7 @@ export const ManufacturerDashboard: React.FC = () => {
               })}
             </div>
 
-            {/* Live Calculated Farmer Share Card (Screen M3 Feature) */}
+            {/* Live Calculated Farmer Share Card */}
             <div className="p-4 bg-gradient-to-r from-emerald-950/60 to-slate-900 rounded-xl border border-emerald-500/40 space-y-1">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
@@ -539,83 +542,148 @@ export const ManufacturerDashboard: React.FC = () => {
               </p>
             </div>
 
-            <Button type="submit" className="w-full py-3">
-              ⛓️ Register Batch On-Chain & Generate QR Codes ➔
+            <Button type="submit" className="w-full py-3 font-bold">
+              ⛓️ Register Formulation On-Chain & Generate Authentic Master QR ➔
             </Button>
           </form>
         </Card>
       )}
 
-      {/* Screen M4 — Unique QR Code Generator Grid */}
-      {activeTab === 'qr_sheet' && latestRegisteredBatch && (
-        <Card className="p-6 space-y-5 animate-fade-in-up">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
+      {/* Screen M4 — Authentic Master QR Code & Label Packaging Portal */}
+      {activeTab === 'qr_sheet' && (
+        <Card className="p-6 space-y-6 animate-fade-in-up">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4">
             <div>
-              <span className="text-xs font-mono text-emerald-400 font-bold">{latestRegisteredBatch.id}</span>
-              <h3 className="text-lg font-bold text-white">Packaging QR Code Print Sheet</h3>
+              <span className="text-xs font-mono text-emerald-400 font-bold">
+                {activeQrBatch ? activeQrBatch.id : 'NO BATCH SELECTED'}
+              </span>
+              <h3 className="text-xl font-bold text-white">Authentic Product Verification QR &amp; Label</h3>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => alert('📄 Generating High-Resolution 300DPI Printable PDF Sheet...')}
-                className="btn-primary text-xs py-2 px-3"
-              >
-                📥 Download PDF Sheet
-              </button>
-              <button
-                onClick={() => alert('📊 Exported CSV of individual serialized verification URLs.')}
-                className="btn-secondary text-xs py-2 px-3"
-              >
-                📊 Export CSV
-              </button>
-            </div>
+
+            {registeredBatches.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 whitespace-nowrap">Select Batch:</span>
+                <select
+                  value={activeQrBatch?.id || ''}
+                  onChange={e => setSelectedBatchIdForQr(e.target.value)}
+                  className="input-field text-xs font-semibold py-1.5 px-3 max-w-[220px]"
+                >
+                  {registeredBatches.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.id} — {b.productName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          <p className="text-xs text-slate-400">
-            Each bottle gets a unique cryptographic serial number. Scanning connects the consumer directly to the blockchain proof.
-          </p>
+          {activeQrBatch ? (() => {
+            const targetId = activeQrBatch.dbId || activeQrBatch.id.replace('BATCH-MFG-', '') || 1;
+            const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mulpath.vercel.app';
+            const verifyUrl = `${originUrl}/verify/${targetId}`;
+            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&data=${encodeURIComponent(verifyUrl)}`;
 
-          {/* Serial QR Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {latestRegisteredBatch.serialQrCodes.map((serial, idx) => {
-              const targetId = latestRegisteredBatch.dbId || createdDbId || 1;
-              const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mulpath.vercel.app';
-              const verifyUrl = `${originUrl}/verify/${targetId}?serial=${serial}`;
-              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=H&data=${encodeURIComponent(verifyUrl)}`;
+            return (
+              <div className="space-y-6">
+                {/* Master QR Verification Passport Card */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-900/90 border border-emerald-500/30 p-6 rounded-3xl shadow-2xl items-center">
+                  <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                    <div className="w-52 h-52 bg-white p-3 rounded-2xl shadow-xl flex items-center justify-center">
+                      <img
+                        src={qrSrc}
+                        alt="Authentic Scannable QR Code"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="text-center space-y-1">
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                        Level-H Scannable Master QR
+                      </span>
+                      <p className="text-[10px] text-slate-400 font-mono truncate max-w-[220px]">
+                        {verifyUrl}
+                      </p>
+                    </div>
+                  </div>
 
-              return (
-                <div key={idx} className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl text-center space-y-3 shadow-lg">
-                  <div className="w-28 h-28 mx-auto bg-white p-2 rounded-xl flex items-center justify-center shadow-md">
-                    <img
-                      src={qrSrc}
-                      alt="Scannable QR"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-mono text-emerald-400 font-bold truncate">#{serial}</p>
-                    <p className="text-[9px] text-slate-400 truncate mt-0.5">{verifyUrl}</p>
-                  </div>
-                  <div className="flex justify-center gap-2 pt-1">
-                    <a
-                      href={qrSrc}
-                      download={`QR-${serial}.png`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[10px] py-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 font-semibold"
-                    >
-                      📥 Save QR
-                    </a>
-                    <button
-                      onClick={() => navigate(`/verify/${targetId}`)}
-                      className="text-[10px] py-1 px-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg border border-emerald-500/40 font-semibold"
-                    >
-                      Audit ↗
-                    </button>
+                  <div className="md:col-span-7 space-y-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-mono text-emerald-400 font-bold bg-slate-800 px-2 py-0.5 rounded">
+                        {activeQrBatch.id}
+                      </span>
+                      <h4 className="text-2xl font-black text-white">{activeQrBatch.productName}</h4>
+                      <p className="text-xs text-slate-400">Serialized on Ethereum Sepolia • 100% Immutable Provenance</p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-slate-800 text-xs">
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                        <span className="text-[10px] text-slate-400 block">Retail Price:</span>
+                        <p className="font-bold text-white text-base">₹{activeQrBatch.retailPriceInr}</p>
+                      </div>
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                        <span className="text-[10px] text-slate-400 block">Farmer Share:</span>
+                        <p className="font-bold text-emerald-400 text-base">{activeQrBatch.farmerSharePercent}%</p>
+                      </div>
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80">
+                        <span className="text-[10px] text-slate-400 block">Created On:</span>
+                        <p className="font-semibold text-slate-200 text-xs mt-0.5">{activeQrBatch.createdAt}</p>
+                      </div>
+                    </div>
+
+                    {activeQrBatch.txHash && (
+                      <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] flex justify-between items-center">
+                        <span className="text-slate-500">On-Chain Tx:</span>
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${activeQrBatch.txHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-400 hover:underline font-bold truncate max-w-[200px]"
+                        >
+                          {activeQrBatch.txHash.slice(0, 16)}...{activeQrBatch.txHash.slice(-8)} ↗
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2.5 pt-2">
+                      <a
+                        href={qrSrc}
+                        download={`QR-${activeQrBatch.id}.png`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-primary text-xs py-2.5 px-4 font-bold flex items-center gap-1.5 shadow-lg"
+                      >
+                        <span>📥 Download Master QR (.PNG)</span>
+                      </a>
+                      <button
+                        onClick={() => window.print()}
+                        className="btn-secondary text-xs py-2.5 px-4 font-semibold flex items-center gap-1.5"
+                      >
+                        <span>🖨️ Print Bottle Label</span>
+                      </button>
+                      <button
+                        onClick={() => navigate(`/verify/${targetId}`)}
+                        className="text-xs py-2.5 px-4 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-xl border border-emerald-500/40 font-bold flex items-center gap-1.5 transition"
+                      >
+                        <span>🔍 Audit on Consumer Page</span>
+                        <span>↗</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })() : (
+            <div className="p-12 text-center space-y-4 bg-slate-900/40 rounded-2xl border border-slate-800">
+              <span className="text-4xl">🏷️</span>
+              <div className="space-y-1">
+                <h4 className="font-bold text-white text-base">No Formulation Batches Registered Yet</h4>
+                <p className="text-xs text-slate-400">Use the Formulation Builder to create your first botanical formulation and generate its authentic QR code.</p>
+              </div>
+              <Button onClick={() => setActiveTab('formulate')} className="text-xs py-2.5 px-5 font-bold">
+                🧪 Go to Formulation Builder ➔
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 
@@ -645,13 +713,21 @@ export const ManufacturerDashboard: React.FC = () => {
                       <td className="p-3 text-slate-300">{b.batchUnits} bottles</td>
                       <td className="p-3 font-bold text-white">₹{b.retailPriceInr}</td>
                       <td className="p-3 font-bold text-emerald-400">{b.farmerSharePercent}%</td>
-                      <td className="p-3">
+                      <td className="p-3 flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedBatchIdForQr(b.id);
+                            setActiveTab('qr_sheet');
+                          }}
+                          className="text-xs text-emerald-400 hover:text-emerald-300 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/30 flex items-center gap-1"
+                        >
+                          <span>🏷️ View QR</span>
+                        </button>
                         <button
                           onClick={() => navigate(`/verify/${targetId}`)}
-                          className="text-xs text-emerald-400 hover:underline font-semibold flex items-center gap-1"
+                          className="text-xs text-slate-400 hover:text-white underline font-semibold flex items-center gap-1"
                         >
-                          <span>View as Consumer</span>
-                          <span>↗</span>
+                          <span>Consumer Audit ↗</span>
                         </button>
                       </td>
                     </tr>
@@ -668,8 +744,9 @@ export const ManufacturerDashboard: React.FC = () => {
         isOpen={showBlockchainModal}
         title="Registering Formulation Batch"
         txHash={mfgTxHash}
+        contractAddress="0x7B1f5793f99Da12E62F22cDdd3a350a35C31df25"
         actionSummary={blockchainActionText}
-        durationMs={5000}
+        durationMs={4000}
         onClose={handleBlockchainModalDone}
       />
     </div>

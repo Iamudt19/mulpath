@@ -46,11 +46,11 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
     setPhase('submitting');
     setProgress(0);
 
-    const initialHash = txHash && txHash.startsWith('0x') 
-      ? txHash 
-      : `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-    
-    setConfirmedHash(initialHash);
+    if (txHash && txHash.startsWith('0x')) {
+      setConfirmedHash(txHash);
+    } else {
+      setConfirmedHash(null);
+    }
 
     // After 1.2s in submitting phase, auto-transition to confirming phase
     const submitTimer = setTimeout(() => {
@@ -58,7 +58,7 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
     }, 1200);
 
     return () => clearTimeout(submitTimer);
-  }, [isOpen]);
+  }, [isOpen, txHash]);
 
   // Progress bar animation in confirming phase
   useEffect(() => {
