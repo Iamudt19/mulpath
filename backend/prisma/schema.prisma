@@ -50,7 +50,8 @@ model User {
 
 model OtpSession {
   id          Int      @id @default(autoincrement())
-  phone       String
+  phone       String?
+  email       String?
   otpCode     String   // 6-digit code (hashed in production)
   expiresAt   DateTime
   verified    Boolean  @default(false)
@@ -60,6 +61,7 @@ model OtpSession {
   user        User?    @relation(fields: [userId], references: [id])
 
   @@index([phone])
+  @@index([email])
 }
 
 model HerbBatch {

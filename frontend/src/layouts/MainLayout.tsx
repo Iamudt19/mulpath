@@ -10,7 +10,6 @@ const navItems = [
   { path: '/lab', label: 'Lab', icon: '🧪' },
   { path: '/manufacturer', label: 'Manufacturer', icon: '💊' },
   { path: '/verify', label: 'Verify', icon: '🔍' },
-  { path: '/admin', label: 'Admin & Ops', icon: '🛡️' },
 ];
 
 const pageTitles: Record<string, string> = {

@@ -57,12 +57,22 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// POST /api/auth/send-otp — Generate & store OTP, send via MSG91 if configured
+// POST /api/auth/send-otp — Generate & store OTP (Email or Phone)
 app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any> => {
   try {
-    const { phone } = req.body;
-    if (!phone || !/^[6-9]\d{9}$/.test(phone)) {
+    const { phone, email } = req.body;
+    if (!phone && !email) {
+      return res.status(400).json({ error: 'Please enter a valid mobile number or email address.' });
+    }
+
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
+    const cleanEmail = email ? email.trim().toLowerCase() : null;
+
+    if (cleanPhone && !/^[6-9]\d{9}$/.test(cleanPhone)) {
       return res.status(400).json({ error: 'Enter a valid 10-digit Indian mobile number.' });
+    }
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Enter a valid email address.' });
     }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -71,50 +81,52 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
     // Store OTP in DB
     try {
       await prisma.otpSession.create({
-        data: { phone, otpCode, expiresAt }
+        data: { 
+          phone: cleanPhone || undefined,
+          email: cleanEmail || undefined,
+          otpCode, 
+          expiresAt 
+        }
       });
     } catch (dbErr: any) {
       console.error('[OTP DB ERROR]', dbErr?.message);
-      // DB not ready yet — Render cold start race condition
       return res.status(503).json({ 
         error: 'Database initializing. Please wait 30 seconds and try again.',
         detail: dbErr?.message 
       });
     }
 
-    // Send via MSG91 if configured
-    const msg91Key = process.env.MSG91_API_KEY;
-    const msg91SenderId = process.env.MSG91_SENDER_ID || 'MULPTH';
-    const msg91TemplateId = process.env.MSG91_TEMPLATE_ID;
-    let smsSent = false;
-
-    if (msg91Key && msg91TemplateId) {
-      try {
-        const smsRes = await fetch(`https://api.msg91.com/api/v5/flow/`, {
-          method: 'POST',
-          headers: { 'authkey': msg91Key, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            flow_id: msg91TemplateId,
-            sender: msg91SenderId,
-            mobiles: `91${phone}`,
-            OTP: otpCode
-          })
-        });
-        smsSent = smsRes.ok;
-        if (!smsSent) console.warn('MSG91 response:', await smsRes.text());
-      } catch (smsErr) {
-        console.warn('SMS gateway error:', smsErr);
+    // If phone: try MSG91 SMS dispatch
+    if (cleanPhone) {
+      const msg91Key = process.env.MSG91_API_KEY;
+      const msg91SenderId = process.env.MSG91_SENDER_ID || 'MULPTH';
+      const msg91TemplateId = process.env.MSG91_TEMPLATE_ID;
+      if (msg91Key && msg91TemplateId) {
+        try {
+          await fetch(`https://api.msg91.com/api/v5/flow/`, {
+            method: 'POST',
+            headers: { 'authkey': msg91Key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              flow_id: msg91TemplateId,
+              sender: msg91SenderId,
+              mobiles: `91${cleanPhone}`,
+              OTP: otpCode
+            })
+          });
+        } catch (smsErr) {
+          console.warn('SMS gateway error:', smsErr);
+        }
       }
     }
 
-    // In dev/no-SMS mode: return OTP in response so frontend can show it
-    const devOtp = (!msg91Key || !msg91TemplateId) ? otpCode : undefined;
-    if (devOtp) console.log(`[DEV OTP] +91${phone} → ${otpCode}`);
+    if (cleanEmail) {
+      console.log(`[EMAIL OTP DISPATCH] Destination: ${cleanEmail} | Verification Code: ${otpCode}`);
+    }
 
     return res.status(200).json({ 
       success: true, 
-      message: smsSent ? `OTP sent to +91${phone}` : `OTP generated for +91${phone}`,
-      ...(devOtp ? { devOtp, notice: 'SMS not configured — OTP shown for development' } : {})
+      message: cleanEmail ? `Verification code generated for ${cleanEmail}` : `OTP generated for +91${cleanPhone}`,
+      devOtp: otpCode
     });
   } catch (error: any) {
     console.error('[SEND OTP ERROR]', error);
@@ -122,16 +134,24 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
   }
 });
 
-// POST /api/auth/verify-otp — Verify OTP, create/fetch user, return JWT
+// POST /api/auth/verify-otp — Verify OTP (Email or Phone), create/fetch user, return JWT
 app.post('/api/auth/verify-otp', async (req: Request, res: Response): Promise<any> => {
   try {
-    const { phone, otp, name, role, language } = req.body;
-    if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP are required.' });
+    const { phone, email, otp, name, role, language } = req.body;
+    if ((!phone && !email) || !otp) {
+      return res.status(400).json({ error: 'Phone/Email and OTP code are required.' });
+    }
+
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
+    const cleanEmail = email ? email.trim().toLowerCase() : null;
 
     let isValid = false;
     const session = await prisma.otpSession.findFirst({
       where: {
-        phone,
+        OR: [
+          cleanPhone ? { phone: cleanPhone } : undefined,
+          cleanEmail ? { email: cleanEmail } : undefined
+        ].filter(Boolean) as any,
         otpCode: otp,
         verified: false,
         expiresAt: { gt: new Date() }
@@ -151,26 +171,42 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response): Promise<an
     }
 
     // Find or create user
-    let user = await prisma.user.findUnique({ where: { phone } });
+    let user = null;
+    if (cleanEmail) {
+      user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    } else if (cleanPhone) {
+      user = await prisma.user.findUnique({ where: { phone: cleanPhone } });
+    }
+
+    const roleEnum = (role === 'COLLECTOR' || role === 'AGGREGATOR' || role === 'LAB' || role === 'MANUFACTURER' || role === 'ADMIN') ? role : 'COLLECTOR';
+
     if (!user) {
-      const roleEnum = (role === 'COLLECTOR' || role === 'AGGREGATOR' || role === 'LAB' || role === 'MANUFACTURER') ? role : 'COLLECTOR';
-      const walletAddr = `0x${Buffer.from(phone + Date.now().toString()).toString('hex').slice(0, 40)}`;
+      const identifier = cleanEmail || cleanPhone || Date.now().toString();
+      const walletAddr = `0x${Buffer.from(identifier + Date.now().toString()).toString('hex').slice(0, 40)}`;
       user = await prisma.user.create({
         data: {
-          phone,
-          name: name || `Farmer_${phone.slice(-4)}`,
+          phone: cleanPhone || undefined,
+          email: cleanEmail || undefined,
+          name: name || (cleanEmail ? cleanEmail.split('@')[0] : `Farmer_${cleanPhone?.slice(-4)}`),
           role: roleEnum as any,
           language: language || 'EN',
           walletAddress: walletAddr,
           walletBalance: 0
         }
       });
-    } else if (language) {
-      user = await prisma.user.update({ where: { id: user.id }, data: { language } });
+    } else {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          role: roleEnum as any,
+          name: name || user.name,
+          language: language || user.language
+        }
+      });
     }
 
     const token = jwt.sign(
-      { userId: user.id, phone: user.phone, role: user.role },
+      { userId: user.id, phone: user.phone, email: user.email, role: user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -182,6 +218,7 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response): Promise<an
         id: user.id,
         name: user.name,
         phone: user.phone,
+        email: user.email,
         role: user.role,
         walletAddress: user.walletAddress,
         walletBalance: user.walletBalance,
@@ -190,7 +227,7 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response): Promise<an
     });
   } catch (error: any) {
     console.error('[VERIFY OTP ERROR]', error);
-    return res.status(500).json({ error: 'Authentication failed. ' + error.message });
+    return res.status(500).json({ error: 'Authentication failed: ' + error.message });
   }
 });
 
@@ -409,17 +446,17 @@ async function verifySpeciesAI(photoFile: Express.Multer.File | undefined, claim
             }
           }
 
-          if (!detectedSpecies) detectedSpecies = sciName || claimedSpecies;
+          const safeSpecies = detectedSpecies || sciName || claimedSpecies || 'Botanical Herb';
           
           // Match against claimed species
-          const isExactMatch = detectedSpecies.toLowerCase() === claimedSpecies.toLowerCase();
+          const isExactMatch = safeSpecies.toLowerCase() === claimedSpecies.toLowerCase();
           const finalScore = isExactMatch ? Math.min(99, Math.max(scorePct, 88)) : Math.min(95, Math.max(scorePct, 65));
 
           return {
             confidence: finalScore,
             flagged: finalScore < 50,
-            detectedSpecies,
-            message: `🌿 PlantNet Verified: ${detectedSpecies} (${sciName}) — ${finalScore}% botanical match`
+            detectedSpecies: safeSpecies,
+            message: `🌿 PlantNet Verified: ${safeSpecies} (${sciName}) — ${finalScore}% botanical match`
           };
         }
       } else {
@@ -706,8 +743,6 @@ app.get('/api/earnings/me', async (req: Request, res: Response): Promise<any> =>
 // ─────────────────────────────────────────────
 // STAGE 3 ROUTES
 // ─────────────────────────────────────────────
-import QRCode from 'qrcode';
-import path from 'path';
 
 // GET all validated batches (for Aggregator)
 app.get('/api/batches/validated', async (req: Request, res: Response): Promise<any> => {
@@ -983,7 +1018,8 @@ app.post('/api/price-transfers', async (req: Request, res: Response): Promise<an
 // POST: Explicitly Accept and Payout a Batch (Aggregator)
 app.post('/api/batches/:id/accept', async (req: Request, res: Response): Promise<any> => {
   try {
-    const id = parseInt(req.params.id);
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = parseInt(rawId as string);
     const { amount, recipientId } = req.body;
 
     const batch = await prisma.herbBatch.update({
@@ -1019,7 +1055,8 @@ app.post('/api/batches/:id/accept', async (req: Request, res: Response): Promise
 // POST: Purchase / Reserve Tested Lot (Manufacturer)
 app.post('/api/batches/:id/purchase', async (req: Request, res: Response): Promise<any> => {
   try {
-    const id = parseInt(req.params.id);
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = parseInt(rawId as string);
     const { purchasedKg } = req.body;
 
     const batch = await prisma.herbBatch.findUnique({ where: { id } });
@@ -1027,7 +1064,7 @@ app.post('/api/batches/:id/purchase', async (req: Request, res: Response): Promi
 
     const updated = await prisma.herbBatch.update({
       where: { id },
-      data: { status: 'PURCHASED' }
+      data: { status: 'PROCESSED' }
     });
 
     return res.status(200).json({ success: true, batch: updated });
@@ -1325,7 +1362,13 @@ app.post('/api/payouts/withdraw', async (req: Request, res: Response): Promise<a
       utrNumber,
       rail: upiId ? 'NPCI Instant UPI 2.0' : 'RBI IMPS Real-Time Rail',
       settlementLatencySeconds: 2.8,
-      status: 'SETTLED',
+      status: 'SETTLED'
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════
 // ── ADMIN & PROTOCOL OPERATIONS APIS ──
 // ══════════════════════════════════════════════════════════════

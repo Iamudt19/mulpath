@@ -59,6 +59,12 @@ interface UserRecord {
 }
 
 export const AdminDashboard: React.FC = () => {
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('mulpath_admin_auth') === 'true' || localStorage.getItem('mulpath_admin_auth') === 'true';
+  });
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [authError, setAuthError] = useState('');
+
   const [activeTab, setActiveTab] = useState<'overview' | 'batches' | 'zones' | 'fraud' | 'users' | 'blockchain'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [batches, setBatches] = useState<BatchRecord[]>([]);
@@ -80,10 +86,30 @@ export const AdminDashboard: React.FC = () => {
   const [resolvingId, setResolvingId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchAllData();
-    const interval = setInterval(fetchAllData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    if (isAdminAuthenticated) {
+      fetchAllData();
+      const interval = setInterval(fetchAllData, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [isAdminAuthenticated]);
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    if (adminPasswordInput.trim() === 'admin' || adminPasswordInput.trim() === 'admin123' || adminPasswordInput.trim() === 'mulpath@admin2026') {
+      sessionStorage.setItem('mulpath_admin_auth', 'true');
+      setIsAdminAuthenticated(true);
+    } else {
+      setAuthError('Incorrect master admin password. Access denied.');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    sessionStorage.removeItem('mulpath_admin_auth');
+    localStorage.removeItem('mulpath_admin_auth');
+    setIsAdminAuthenticated(false);
+    setAdminPasswordInput('');
+  };
 
   const fetchAllData = async () => {
     try {
@@ -151,6 +177,58 @@ export const AdminDashboard: React.FC = () => {
 
   const flaggedBatches = batches.filter(b => b.aiFlagged || b.locationMismatch || b.weightMismatch);
 
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-slate-950/95 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6 text-slate-100 text-center animate-fade-in">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-center justify-center text-3xl mx-auto shadow-inner">
+            🛡️
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-black text-white tracking-tight">
+              Protocol Operations & Security
+            </h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              This portal is restricted to authorized Mūlpath network operators. Enter the master administrator password to unlock.
+            </p>
+          </div>
+
+          <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                Master Admin Passcode
+              </label>
+              <input
+                type="password"
+                value={adminPasswordInput}
+                onChange={(e) => setAdminPasswordInput(e.target.value)}
+                placeholder="Enter admin password..."
+                className="input-field text-sm font-mono tracking-wider"
+                autoFocus
+                required
+              />
+            </div>
+
+            {authError && (
+              <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300 font-semibold">
+                ⚠️ {authError}
+              </div>
+            )}
+
+            <Button type="submit" className="w-full py-3 text-sm font-bold shadow-lg">
+              Authenticate & Unlock Console ➔
+            </Button>
+          </form>
+
+          <p className="text-[10px] text-slate-500">
+            Protected by Mūlpath Cryptographic Access Control · Direct access via <code className="text-slate-400">/admin</code> only
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-20 max-w-7xl mx-auto">
       {/* ── Header & Protocol Health ── */}
@@ -185,6 +263,13 @@ export const AdminDashboard: React.FC = () => {
             <span>⛓️ Etherscan</span>
             <span>↗</span>
           </a>
+          <button
+            onClick={handleAdminLogout}
+            className="text-xs py-2 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 font-semibold border border-red-500/30 flex items-center gap-1.5 transition"
+            title="Lock Admin Console"
+          >
+            <span>🔒 Lock</span>
+          </button>
         </div>
       </div>
 
