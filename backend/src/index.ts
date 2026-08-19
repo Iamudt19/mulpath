@@ -31,9 +31,6 @@ const getEmailTransporter = () => {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_PORT === '465',
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 7000,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -42,19 +39,49 @@ const getEmailTransporter = () => {
   }
   if (process.env.GMAIL_USER && (process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD)) {
     const rawPass = process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
+    const cleanUser = process.env.GMAIL_USER.trim();
+    const cleanPass = rawPass.replace(/\s+/g, '');
     return nodemailer.createTransport({
-      service: 'gmail',
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 7000,
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.GMAIL_USER.trim(),
-        pass: rawPass.replace(/\s+/g, ''),
+        user: cleanUser,
+        pass: cleanPass,
       },
     });
   }
   return null;
 };
+
+app.get('/api/auth/test-smtp', async (req: Request, res: Response): Promise<any> => {
+  const user = process.env.GMAIL_USER;
+  const hasPass = !!(process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD);
+  const transporter = getEmailTransporter();
+  if (!transporter) {
+    return res.status(500).json({ 
+      status: 'error', 
+      message: 'SMTP transporter not configured', 
+      userConfigured: user || null, 
+      hasPass 
+    });
+  }
+  try {
+    await transporter.verify();
+    return res.status(200).json({ 
+      status: 'ok', 
+      message: `Successfully authenticated with Gmail as ${user}`, 
+      userConfigured: user 
+    });
+  } catch (err: any) {
+    return res.status(500).json({ 
+      status: 'error', 
+      message: err.message, 
+      code: err.code, 
+      userConfigured: user 
+    });
+  }
+});
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -161,8 +188,9 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
       const transporter = getEmailTransporter();
       if (transporter) {
         try {
+          const senderEmail = process.env.GMAIL_USER?.trim() || process.env.SMTP_USER || 'iamudt10@gmail.com';
           const mailPromise = transporter.sendMail({
-            from: process.env.EMAIL_FROM || process.env.GMAIL_USER || process.env.SMTP_USER || '"Mūlpath Traceability" <auth@mulpath.org>',
+            from: `"Mūlpath Traceability" <${senderEmail}>`,
             to: cleanEmail,
             subject: `🌿 ${otpCode} is your Mūlpath verification code`,
             html: `

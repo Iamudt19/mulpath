@@ -11,10 +11,11 @@ const transporter = nodemailer.createTransport({
 });
 
 async function main() {
-  console.log(`Testing email dispatch from: ${process.env.GMAIL_USER}...`);
+  const targetEmail = process.argv[2] || process.env.GMAIL_USER || 'iamudt10@gmail.com';
+  console.log(`Testing email dispatch from: ${process.env.GMAIL_USER} -> to: ${targetEmail}...`);
   const info = await transporter.sendMail({
     from: `"Mūlpath Traceability" <${process.env.GMAIL_USER}>`,
-    to: process.env.GMAIL_USER,
+    to: targetEmail,
     subject: '🌿 749201 is your Mūlpath verification code',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 540px; margin: auto; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.3);">
