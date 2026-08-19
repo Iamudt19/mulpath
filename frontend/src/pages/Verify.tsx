@@ -35,24 +35,13 @@ export const VerifyPage: React.FC = () => {
   useEffect(() => {
     // Fetch all formulations for the quick selector
     fetch(`${API_BASE}/api/formulations`)
-      .then(res => res.json())
+      .then(res => res.ok ? res.json() : [])
       .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setFormulationsList(data);
-        } else {
-          setFormulationsList([
-            { id: 1, name: 'Mūlpath Pure Ashwagandha Extract (500mg)', finalPriceInr: 499, fairTradePercentage: 18.2 },
-            { id: 2, name: 'Organic Holy Tulsi Immune Booster', finalPriceInr: 349, fairTradePercentage: 22.0 },
-            { id: 3, name: 'Wild Brahmi Cognitive Blend', finalPriceInr: 599, fairTradePercentage: 16.5 }
-          ]);
         }
       })
-      .catch(() => {
-        setFormulationsList([
-          { id: 1, name: 'Mūlpath Pure Ashwagandha Extract (500mg)', finalPriceInr: 499, fairTradePercentage: 18.2 },
-          { id: 2, name: 'Organic Holy Tulsi Immune Booster', finalPriceInr: 349, fairTradePercentage: 22.0 }
-        ]);
-      });
+      .catch(() => {});
 
     if (id) {
       setIsLoading(true);

@@ -11,7 +11,6 @@ const navItems = [
   { path: '/lab', key: 'nav.lab', defaultLabel: 'Quality Lab', icon: '🧪' },
   { path: '/manufacturer', key: 'nav.manufacturer', defaultLabel: 'Manufacturer', icon: '💊' },
   { path: '/verify', key: 'nav.verify', defaultLabel: 'Verify', icon: '🔍' },
-  { path: '/admin', key: 'nav.admin', defaultLabel: 'Admin & Ops', icon: '🛡️' },
 ];
 
 export default function MainLayout() {
@@ -184,18 +183,6 @@ export default function MainLayout() {
                 ))}
               </select>
             </div>
-
-            <button
-              onClick={() => setShowReviewQueue(true)}
-              className="bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
-              title="Ops Human Review Queue for anti-fraud exceptions"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-              </span>
-              <span className="hidden sm:inline">{t('nav.review_queue', 'Review Queue')}</span>
-            </button>
 
             {/* Stakeholder Profile or Login Button */}
             {currentUser ? (

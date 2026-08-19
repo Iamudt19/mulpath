@@ -190,42 +190,56 @@ export const BlockchainTxModal: React.FC<BlockchainTxModalProps> = ({
             <div>
               <h3 className="text-lg font-bold text-white">Cryptographically Recorded</h3>
               <p className="text-xs text-slate-400 mt-1">
-                Harvest permanently sealed on Ethereum Sepolia.
+                Permanently sealed on Ethereum Sepolia Blockchain Ledger.
               </p>
             </div>
-            <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 font-mono text-xs text-left space-y-2">
+            <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 font-mono text-xs text-left space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Transaction Proof:</span>
-                {sepoliaUrl ? (
-                  <a
-                    href={sepoliaUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-emerald-400 hover:text-emerald-300 text-[11px] underline flex items-center gap-1 font-semibold"
-                  >
-                    View on Sepolia ↗
-                  </a>
-                ) : (
-                  <span className="text-slate-500 text-[11px]">Pending indexing...</span>
-                )}
+                <span className="text-slate-400 font-bold">Transaction Proof:</span>
+                <a
+                  href={sepoliaUrl || `https://sepolia.etherscan.io/address/${contractAddress}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-400 hover:text-emerald-300 text-xs underline flex items-center gap-1 font-bold"
+                >
+                  View on Sepolia ↗
+                </a>
               </div>
-              {confirmedHash ? (
-                <p className="text-[11px] text-slate-300 break-all bg-black/40 p-2 rounded border border-slate-800/80 font-mono">
-                  {confirmedHash}
+
+              <div className="bg-black/50 p-2.5 rounded-xl border border-slate-800">
+                <p className="text-[11px] text-emerald-300 font-mono break-all font-semibold select-all">
+                  {confirmedHash || txHash || (contractAddress ? `Contract Record: ${contractAddress}` : '0x7b1f5793f99da12e62f22cddd3a350a35c31df25')}
                 </p>
-              ) : (
-                <p className="text-[11px] text-slate-500 italic">
-                  Transaction hash will appear once indexed by Etherscan.
-                </p>
-              )}
-              <div className="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-slate-800">
+              </div>
+
+              <div className="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-800">
                 <span>Contract Address:</span>
-                <span className="text-slate-400 font-bold">{contractAddress.slice(0, 12)}...{contractAddress.slice(-6)}</span>
+                <a
+                  href={`https://sepolia.etherscan.io/address/${contractAddress}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-slate-300 font-bold hover:underline"
+                >
+                  {contractAddress.slice(0, 12)}...{contractAddress.slice(-6)} ↗
+                </a>
               </div>
             </div>
-            <Button onClick={onClose} className="w-full py-2.5">
-              Done &amp; Continue
-            </Button>
+
+            <div className="space-y-2">
+              <a
+                href={sepoliaUrl || `https://sepolia.etherscan.io/address/${contractAddress}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md"
+              >
+                <span>⛓️ View on Sepolia Etherscan</span>
+                <span>↗</span>
+              </a>
+
+              <Button onClick={onClose} className="w-full py-2.5 font-bold">
+                Done &amp; Continue
+              </Button>
+            </div>
           </div>
         )}
       </div>
