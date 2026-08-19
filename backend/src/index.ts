@@ -54,31 +54,41 @@ const getEmailTransporter = () => {
   return null;
 };
 
-app.get('/api/auth/test-smtp', async (req: Request, res: Response): Promise<any> => {
+app.get('/api/auth/debug-email', async (req: Request, res: Response): Promise<any> => {
+  const to = (req.query.to as string) || process.env.GMAIL_USER || 'iamudt19@gmail.com';
   const user = process.env.GMAIL_USER;
-  const hasPass = !!(process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD);
+  const passLength = (process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || '').length;
   const transporter = getEmailTransporter();
+
   if (!transporter) {
-    return res.status(500).json({ 
-      status: 'error', 
-      message: 'SMTP transporter not configured', 
-      userConfigured: user || null, 
-      hasPass 
+    return res.status(500).json({
+      status: 'error',
+      reason: 'No transporter configured. GMAIL_USER or GMAIL_APP_PASSWORD missing.',
+      env: { GMAIL_USER: user || null, passLength }
     });
   }
+
   try {
-    await transporter.verify();
-    return res.status(200).json({ 
-      status: 'ok', 
-      message: `Successfully authenticated with Gmail as ${user}`, 
-      userConfigured: user 
+    const info = await transporter.sendMail({
+      from: `"Mūlpath Traceability" <${user || 'iamudt10@gmail.com'}>`,
+      to,
+      subject: '🌿 Mūlpath Live Verification Test Code: 554433',
+      html: '<p>Your test verification code is: <b>554433</b></p>'
+    });
+    return res.status(200).json({
+      status: 'success',
+      message: `Email successfully sent to ${to}`,
+      messageId: info.messageId,
+      response: info.response
     });
   } catch (err: any) {
-    return res.status(500).json({ 
-      status: 'error', 
-      message: err.message, 
-      code: err.code, 
-      userConfigured: user 
+    return res.status(500).json({
+      status: 'error',
+      errorMessage: err.message,
+      errorCode: err.code,
+      errorResponse: err.response,
+      errorStack: err.stack,
+      env: { GMAIL_USER: user || null, passLength }
     });
   }
 });
@@ -216,6 +226,16 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
             mailPromise,
             new Promise((_, reject) => setTimeout(() => reject(new Error('Email dispatch timeout (6s)')), 6000))
           ]);
+
+          emailSent = true;
+          console.log(`[EMAIL OTP SENT] Successfully dispatched code to ${cleanEmail}`);
+        } catch (err: any) {
+          console.warn(`[EMAIL OTP WARN] Nodemailer dispatch failed for ${cleanEmail}:`, err?.message);
+        }
+      } else {
+        console.log(`[EMAIL OTP DEV MODE] SMTP not configured. Verification code for ${cleanEmail} is: ${otpCode}`);
+      }
+    }
 
     // If SMTP wasn't sent, try Resend HTTP API (works over port 443 HTTPS without SMTP restrictions)
     if (cleanEmail && !emailSent && process.env.RESEND_API_KEY) {
