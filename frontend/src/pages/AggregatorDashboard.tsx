@@ -95,9 +95,22 @@ export const AggregatorDashboard: React.FC = () => {
   const [processingTxHash, setProcessingTxHash] = useState<string>('');
   const [selectedLotDetail, setSelectedLotDetail] = useState<LotItem | null>(null);
 
-  // Load real validated batches on mount
+  // Lab Routing State
+  const [availableLabs, setAvailableLabs] = useState<any[]>([]);
+  const [selectedLabId, setSelectedLabId] = useState<string>('');
+
+  // Load real validated batches and registered labs on mount
   useEffect(() => {
     fetchValidatedBatches();
+    fetch(`${API_BASE}/api/users/stakeholders?role=LAB`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAvailableLabs(data);
+          if (data.length > 0) setSelectedLabId(data[0].id.toString());
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchValidatedBatches = async () => {
@@ -312,6 +325,7 @@ export const AggregatorDashboard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           batchIds: selectedBagIds,
+          assignedLabId: selectedLabId || undefined,
           notes: `Merged Lot ${lotName} - Post-Drying Yield: ${enteredDryKg}kg`
         })
       });
@@ -791,6 +805,26 @@ export const AggregatorDashboard: React.FC = () => {
                 {mergeDiscrepancyWarning}
               </div>
             )}
+
+            {/* Assign Target Quality Lab */}
+            <div className="space-y-1.5">
+              <label className="input-label text-slate-300">Assign Target Quality Testing Lab:</label>
+              <select
+                value={selectedLabId}
+                onChange={e => setSelectedLabId(e.target.value)}
+                className="input-field text-xs text-white"
+              >
+                {availableLabs.length > 0 ? (
+                  availableLabs.map(lab => (
+                    <option key={lab.id} value={lab.id} className="bg-slate-900 text-white">
+                      🧪 {lab.name} {lab.email ? `(${lab.email})` : ''}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" className="bg-slate-900 text-white">🧪 NABL Certified Quality Lab #1 (Default)</option>
+                )}
+              </select>
+            </div>
 
             {/* Type Lot Name to Confirm */}
             <div className="space-y-1.5">

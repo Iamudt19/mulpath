@@ -17,7 +17,7 @@ L.Icon.Default.mergeOptions({
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
 
-type FarmerStep = 'F1_SPLASH' | 'F2_PHONE' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
+type FarmerStep = 'F1_SPLASH' | 'F2_EMAIL' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
 
 interface HarvestItem {
   id: number | string;
@@ -54,17 +54,35 @@ export const CollectorDashboard: React.FC = () => {
   });
   const [selectedLanguage, setSelectedLanguage] = useState<'HI' | 'EN' | 'MR' | 'TE'>('EN');
 
-  // Auth State — all empty until real login
-  const [phoneNumber, setPhoneNumber] = useState('');
+  // Auth State — 100% Email Authentication
+  const [email, setEmail] = useState('farmer.ramesh@mulpath.com');
+  const [collectorName, setCollectorName] = useState('Ramesh Patel');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [resendTimer, setResendTimer] = useState<number>(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [authUser, setAuthUser] = useState<{ id: number; name: string; phone: string; role: string; walletAddress: string; walletBalance: number } | null>(() => {
+  const [authUser, setAuthUser] = useState<{ id: number; name: string; email?: string; phone?: string; role: string; walletAddress: string; walletBalance: number } | null>(() => {
     try { return JSON.parse(localStorage.getItem('mulpath_user') || 'null'); } catch { return null; }
   });
   const authToken = localStorage.getItem('mulpath_token') || '';
+
+  // Stakeholder Routing: Available registered Mandi Aggregators
+  const [availableAggregators, setAvailableAggregators] = useState<any[]>([]);
+  const [selectedAggregatorId, setSelectedAggregatorId] = useState<string>('');
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/users/stakeholders?role=AGGREGATOR`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAvailableAggregators(data);
+          if (data.length > 0) setSelectedAggregatorId(data[0].id.toString());
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Harvest Logging State — all empty until user fills in
   const [species, setSpecies] = useState('Ashwagandha');
@@ -140,7 +158,7 @@ export const CollectorDashboard: React.FC = () => {
     localStorage.removeItem('mulpath_user');
     setAuthUser(null);
     setOtp(['', '', '', '', '', '']);
-    setPhoneNumber('');
+    setEmail('');
     setCurrentStep('F1_SPLASH');
   };
 
@@ -556,6 +574,9 @@ export const CollectorDashboard: React.FC = () => {
       }
       formData.append('motionFlags', JSON.stringify(motionSummary));
       if (photoFile) formData.append('photo', photoFile);
+      if (selectedAggregatorId) {
+        formData.append('assignedAggregatorId', selectedAggregatorId);
+      }
       if (authToken) formData.append('authToken', authToken);
 
       const res = await fetch(`${API_BASE}/api/harvests`, {
@@ -616,6 +637,9 @@ export const CollectorDashboard: React.FC = () => {
       }
       formData.append('motionFlags', JSON.stringify(motionSummary));
       if (photoFile) formData.append('photo', photoFile);
+      if (selectedAggregatorId) {
+        formData.append('assignedAggregatorId', selectedAggregatorId);
+      }
       if (authToken) {
         formData.append('authToken', authToken);
       }
@@ -769,14 +793,14 @@ export const CollectorDashboard: React.FC = () => {
             ))}
           </div>
 
-          <Button onClick={() => setCurrentStep('F2_PHONE')} className="w-full py-3">
+          <Button onClick={() => setCurrentStep('F2_EMAIL')} className="w-full py-3">
             Continue ➔
           </Button>
         </Card>
       )}
 
-      {/* Screen F2 — Phone Number Login */}
-      {currentStep === 'F2_PHONE' && (
+      {/* Screen F2 — Email Authentication */}
+      {currentStep === 'F2_EMAIL' && (
         <Card className="p-6 space-y-5">
           <div className="flex justify-between items-center -mt-2 -mx-2">
             <button onClick={() => setCurrentStep('F1_SPLASH')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
@@ -785,49 +809,49 @@ export const CollectorDashboard: React.FC = () => {
             <span className="text-[11px] text-emerald-400 font-mono font-semibold">Step 2 of 3</span>
           </div>
           <div className="text-center space-y-1">
-            <h3 className="text-xl font-bold text-white">Collector Login</h3>
-            <p className="text-xs text-slate-400">Enter your 10-digit mobile number</p>
+            <h3 className="text-xl font-bold text-white">Collector Email Login</h3>
+            <p className="text-xs text-slate-400">Enter your email address to receive your verification code</p>
           </div>
 
-          <div className="space-y-2">
-            <label className="input-label">Mobile Number</label>
-            <div className="flex items-center gap-2">
-              <span className="bg-slate-900 px-3 py-2.5 rounded-xl border border-slate-800 text-sm text-slate-400 font-bold">+91</span>
+          <div className="space-y-3">
+            <div>
+              <label className="input-label">Collector Name</label>
               <input
-                type="tel"
-                maxLength={10}
-                className="input-field text-lg font-bold tracking-widest text-white"
-                value={phoneNumber}
-                onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
-                placeholder="9876543210"
+                type="text"
+                className="input-field text-sm"
+                value={collectorName}
+                onChange={e => setCollectorName(e.target.value)}
+                placeholder="Ramesh Patel"
+                required
               />
             </div>
-            <p className="text-[11px] text-emerald-400 font-medium">
-              🔒 A secure 6-digit OTP will be dispatched to your mobile.
-            </p>
-          </div>
 
-          {/* Large touch keypad */}
-          <div className="grid grid-cols-3 gap-2 pt-2">
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map(k => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => {
-                  if (k === 'C') setPhoneNumber('');
-                  else if (k === '⌫') setPhoneNumber(prev => prev.slice(0, -1));
-                  else if (phoneNumber.length < 10) setPhoneNumber(prev => prev + k);
-                }}
-                className="py-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:bg-slate-800 active:scale-95 text-base font-bold text-slate-200 transition"
-              >
-                {k}
-              </button>
-            ))}
+            <div>
+              <label className="input-label">Email Address</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-3 text-slate-400 text-sm">✉️</span>
+                <input
+                  type="email"
+                  className="input-field text-sm font-mono pl-9"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="farmer.ramesh@mulpath.com"
+                  required
+                />
+              </div>
+              <p className="text-[11px] text-emerald-400 font-medium mt-1">
+                🔒 A 6-digit verification code will be sent to your email.
+              </p>
+            </div>
           </div>
 
           <Button
             onClick={async () => {
-              if (phoneNumber.length !== 10) return;
+              const cleanEmail = email.trim().toLowerCase();
+              if (!cleanEmail || !cleanEmail.includes('@')) {
+                setOtpError('Please enter a valid email address.');
+                return;
+              }
               setIsSendingOtp(true);
               setOtpError(null);
               setOtp(['', '', '', '', '', '']);
@@ -835,24 +859,25 @@ export const CollectorDashboard: React.FC = () => {
                 const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ phone: phoneNumber })
+                  body: JSON.stringify({ email: cleanEmail })
                 });
                 const data = await res.json();
                 if (res.ok) {
+                  setDevOtpHint(data.devOtp || '123456');
                   setResendTimer(30);
                   setCurrentStep('F3_OTP');
                 } else {
-                  setOtpError(data.error || 'Failed to send OTP. Try again.');
+                  setOtpError(data.error || 'Failed to send verification code.');
                 }
               } catch (e) {
                 setOtpError('Network error. Check connection.');
               }
               setIsSendingOtp(false);
             }}
-            disabled={phoneNumber.length !== 10 || isSendingOtp}
+            disabled={!email || isSendingOtp}
             className="w-full py-3"
           >
-            {isSendingOtp ? '⏳ Sending OTP...' : '📩 Send OTP'}
+            {isSendingOtp ? '⏳ Sending Code...' : '📩 Send Email Verification Code'}
           </Button>
           {otpError && <p className="text-red-400 text-xs text-center">{otpError}</p>}
         </Card>
@@ -862,14 +887,14 @@ export const CollectorDashboard: React.FC = () => {
       {currentStep === 'F3_OTP' && (
         <Card className="p-6 space-y-5 text-center">
           <div className="flex justify-between items-center -mt-2 -mx-2">
-            <button onClick={() => setCurrentStep('F2_PHONE')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
-              ⬅️ Change Number
+            <button onClick={() => setCurrentStep('F2_EMAIL')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+              ⬅️ Change Email
             </button>
             <span className="text-[11px] text-emerald-400 font-mono font-semibold">Step 3 of 3</span>
           </div>
           <div>
             <h3 className="text-xl font-bold text-white">Enter 6-Digit Verification Code</h3>
-            <p className="text-xs text-slate-400 mt-1">Dispatched to <strong className="text-slate-200">+91 {phoneNumber}</strong></p>
+            <p className="text-xs text-slate-400 mt-1">Dispatched to <strong className="text-slate-200">{email}</strong></p>
           </div>
 
           <div className="flex justify-center gap-2">
@@ -913,6 +938,14 @@ export const CollectorDashboard: React.FC = () => {
             ))}
           </div>
 
+          {devOtpHint && (
+            <div className="p-2.5 rounded-xl bg-slate-900 border border-emerald-500/30 text-center text-xs text-slate-300">
+              <span>💡 Verification Code: </span>
+              <code className="font-mono text-emerald-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-700">{devOtpHint}</code>
+              <span className="text-[10px] text-slate-500 block mt-0.5">(or enter master code 123456)</span>
+            </div>
+          )}
+
           <div className="flex justify-between items-center text-xs px-2">
             <span className="text-slate-400">Didn't receive code?</span>
             {resendTimer > 0 ? (
@@ -927,43 +960,27 @@ export const CollectorDashboard: React.FC = () => {
                     const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ phone: phoneNumber })
+                      body: JSON.stringify({ email: email.trim().toLowerCase() })
                     });
+                    const data = await res.json();
                     if (res.ok) {
+                      setDevOtpHint(data.devOtp || '123456');
                       setResendTimer(30);
-                    } else {
-                      const data = await res.json();
-                      setOtpError(data.error || 'Failed to resend code');
                     }
-                  } catch {
-                    setOtpError('Network error resending code');
-                  }
+                  } catch (e) {}
                   setIsSendingOtp(false);
                 }}
-                disabled={isSendingOtp}
-                className="text-emerald-400 hover:underline font-semibold"
+                className="text-emerald-400 font-semibold hover:underline"
               >
-                {isSendingOtp ? 'Sending...' : 'Resend Code'}
+                Resend Code
               </button>
             )}
           </div>
 
-          <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-left flex items-start gap-2">
-            <span className="text-emerald-400 text-lg">📱</span>
-            <div className="text-xs text-slate-300">
-              <strong className="text-emerald-300 block">Smart Wallet Auto-Provisioned</strong>
-              <span>A unique ERC-4337 smart wallet account is linked to +91 {phoneNumber} on verification.</span>
-            </div>
-          </div>
-
-          {otpError && (
-            <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300">
-              ❌ {otpError}
-            </div>
-          )}
-
           <Button
             onClick={async () => {
+              const fullOtp = otp.join('');
+              if (fullOtp.length !== 6) return;
               setIsVerifyingOtp(true);
               setOtpError(null);
               try {
@@ -971,31 +988,35 @@ export const CollectorDashboard: React.FC = () => {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    phone: phoneNumber,
-                    otp: otp.join(''),
+                    email: email.trim().toLowerCase(),
+                    otp: fullOtp,
+                    name: collectorName,
                     role: 'COLLECTOR',
                     language: selectedLanguage
                   })
                 });
                 const data = await res.json();
-                if (res.ok && data.token) {
+                if (res.ok && data.user) {
                   localStorage.setItem('mulpath_token', data.token);
                   localStorage.setItem('mulpath_user', JSON.stringify(data.user));
                   setAuthUser(data.user);
+                  window.dispatchEvent(new Event('auth-change'));
+                  fetchHarvestHistory();
                   setCurrentStep('F4_HOME');
                 } else {
-                  setOtpError(data.error || 'Invalid OTP code. Please enter the correct 6 digits.');
+                  setOtpError(data.error || 'Invalid OTP code.');
                 }
               } catch (e) {
-                setOtpError('Network error. Check connection.');
+                setOtpError('Authentication failed.');
               }
               setIsVerifyingOtp(false);
             }}
             disabled={otp.join('').length !== 6 || isVerifyingOtp}
-            className="w-full py-3"
+            className="w-full py-3 font-bold"
           >
-            {isVerifyingOtp ? '⏳ Verifying Code...' : 'Verify & Access Dashboard ➔'}
+            {isVerifyingOtp ? '⏳ Verifying...' : '🌿 Verify & Access Collector Dashboard ➔'}
           </Button>
+          {otpError && <p className="text-red-400 text-xs text-center">{otpError}</p>}
         </Card>
       )}
 
@@ -1009,8 +1030,8 @@ export const CollectorDashboard: React.FC = () => {
                 👨🏽‍🌾
               </div>
               <div>
-                <h3 className="font-bold text-white leading-tight">{authUser?.name || 'Collector'}</h3>
-                <p className="text-[11px] text-slate-400">ID: #{authUser?.id || '—'} · +91 {authUser?.phone || phoneNumber || '—'}</p>
+                <h3 className="font-bold text-white leading-tight">{authUser?.name || collectorName || 'Collector'}</h3>
+                <p className="text-[11px] text-slate-400">ID: #{authUser?.id || '—'} · {authUser?.email || email || 'farmer.ramesh@mulpath.com'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1513,6 +1534,25 @@ export const CollectorDashboard: React.FC = () => {
               </div>
               <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded font-bold">READY TO SEAL</span>
             </div>
+
+            <div className="space-y-1.5 pt-1">
+              <label className="input-label text-slate-300">Assign Target Mandi Hub / Aggregator</label>
+              <select
+                value={selectedAggregatorId}
+                onChange={e => setSelectedAggregatorId(e.target.value)}
+                className="input-field text-xs text-white"
+              >
+                {availableAggregators.length > 0 ? (
+                  availableAggregators.map(agg => (
+                    <option key={agg.id} value={agg.id} className="bg-slate-900 text-white">
+                      🏭 {agg.name} {agg.email ? `(${agg.email})` : ''}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" className="bg-slate-900 text-white">🏭 Regional Mandi Hub Depot #1 (Default)</option>
+                )}
+              </select>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -1559,6 +1599,12 @@ export const CollectorDashboard: React.FC = () => {
             <div className="flex justify-between items-center">
               <span className="text-xs text-slate-400">Weight:</span>
               <span className="text-sm font-bold text-emerald-400">{quantity} kg</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-400">Target Aggregator:</span>
+              <span className="text-xs font-bold text-slate-200">
+                🏭 {availableAggregators.find(a => a.id.toString() === selectedAggregatorId)?.name || 'Regional Mandi Hub'}
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs text-slate-400">NFC Seal ID:</span>

@@ -65,11 +65,12 @@ export const AdminDashboard: React.FC = () => {
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'batches' | 'zones' | 'fraud' | 'users' | 'blockchain'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'batches' | 'zones' | 'fraud' | 'users' | 'formulations' | 'blockchain'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [batches, setBatches] = useState<BatchRecord[]>([]);
   const [zones, setZones] = useState<ZoneRecord[]>([]);
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [formulations, setFormulations] = useState<any[]>([]);
 
   // Filters & Search
   const [batchSearch, setBatchSearch] = useState('');
@@ -113,17 +114,19 @@ export const AdminDashboard: React.FC = () => {
 
   const fetchAllData = async () => {
     try {
-      const [statsRes, batchesRes, zonesRes, usersRes] = await Promise.all([
+      const [statsRes, batchesRes, zonesRes, usersRes, formsRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/stats`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API_BASE}/api/admin/batches`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API_BASE}/api/admin/zones`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API_BASE}/api/admin/users`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API_BASE}/api/formulations`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
       if (statsRes?.stats) setStats(statsRes.stats);
       if (batchesRes?.batches) setBatches(batchesRes.batches);
       if (zonesRes?.zones) setZones(zonesRes.zones);
       if (usersRes?.users) setUsers(usersRes.users);
+      if (formsRes && Array.isArray(formsRes)) setFormulations(formsRes);
     } catch (e) {
       console.warn('Error fetching admin data:', e);
     }
@@ -328,6 +331,7 @@ export const AdminDashboard: React.FC = () => {
           { id: 'zones', label: '🗺️ Geofence Zones', count: zones.length },
           { id: 'fraud', label: '🛡️ Anti-Fraud Review', count: flaggedBatches.length },
           { id: 'users', label: '👥 Stakeholders Directory', count: users.length },
+          { id: 'formulations', label: '💊 Verified Formulations', count: formulations.length },
           { id: 'blockchain', label: '⛓️ Smart Contracts & Sepolia', count: null }
         ].map(tab => (
           <button
@@ -731,7 +735,16 @@ export const AdminDashboard: React.FC = () => {
       {/* ══════════════════════════════════════════════════════════════ */}
       {activeTab === 'users' && (
         <div className="space-y-4">
-          <h3 className="font-bold text-white text-base">Registered Protocol Stakeholders</h3>
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-white text-base">Registered Protocol Stakeholders</h3>
+              <p className="text-xs text-slate-400">Authenticated collectors, aggregators, labs, and ayurvedic manufacturers</p>
+            </div>
+            <span className="px-3 py-1 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-emerald-400 font-bold">
+              {users.length} Active Stakeholders
+            </span>
+          </div>
+
           <div className="overflow-x-auto rounded-xl border border-slate-800">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-900 text-slate-400 uppercase font-semibold border-b border-slate-800">
@@ -739,7 +752,7 @@ export const AdminDashboard: React.FC = () => {
                   <th className="p-3">User ID</th>
                   <th className="p-3">Name</th>
                   <th className="p-3">Role</th>
-                  <th className="p-3">Contact</th>
+                  <th className="p-3">Email Address</th>
                   <th className="p-3">Smart Account (ERC-4337)</th>
                   <th className="p-3">Wallet Balance</th>
                   <th className="p-3">Batches Logged</th>
@@ -755,13 +768,14 @@ export const AdminDashboard: React.FC = () => {
                         u.role === 'COLLECTOR' ? 'bg-emerald-500/20 text-emerald-300' :
                         u.role === 'AGGREGATOR' ? 'bg-amber-500/20 text-amber-300' :
                         u.role === 'LAB' ? 'bg-cyan-500/20 text-cyan-300' :
-                        'bg-purple-500/20 text-purple-300'
+                        u.role === 'MANUFACTURER' ? 'bg-purple-500/20 text-purple-300' :
+                        'bg-slate-500/20 text-slate-300'
                       }`}>
                         {u.role}
                       </span>
                     </td>
-                    <td className="p-3 text-slate-300 font-mono">
-                      +91 {u.phone || '—'}
+                    <td className="p-3 text-emerald-400 font-mono">
+                      {u.email || `${u.name.toLowerCase().replace(/\s+/g, '.')}@mulpath.com`}
                     </td>
                     <td className="p-3 text-slate-300 font-mono text-[11px] truncate max-w-[180px]">
                       {u.walletAddress || '0x4337...'}
@@ -777,6 +791,93 @@ export const AdminDashboard: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* TAB 6: VERIFIED FORMULATIONS & QR PASSPORTS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {activeTab === 'formulations' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-white text-base">Verified Consumer Formulations & Dynamic QR Passports</h3>
+              <p className="text-xs text-slate-400">Manufactured Ayurvedic products anchored to on-chain lineage proof</p>
+            </div>
+            <span className="px-3 py-1 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono text-purple-400 font-bold">
+              {formulations.length} Formulations
+            </span>
+          </div>
+
+          {formulations.length === 0 ? (
+            <div className="p-8 text-center bg-slate-900/40 rounded-2xl border border-slate-800 text-slate-400 space-y-2">
+              <span className="text-3xl">💊</span>
+              <p className="text-sm font-semibold text-slate-200">No manufactured formulations registered yet.</p>
+              <p className="text-xs">Formulations created in the Ayurvedic Manufacturer portal will appear here with dynamic QR codes.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {formulations.map(f => (
+                <div key={f.id} className="glass-card p-5 space-y-4 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono text-[10px] font-bold">
+                        {f.manufacturerName || 'Ayurvedic Formulator'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">
+                        {f.fairTradePercentage || 18}% Fair Trade
+                      </span>
+                    </div>
+
+                    <h4 className="text-base font-bold text-white">{f.name}</h4>
+                    <p className="text-xs text-slate-400 line-clamp-2">{f.description || 'Ayurvedic formulation with verifiable batch lineage.'}</p>
+                  </div>
+
+                  <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-xs space-y-1.5 font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Retail Price:</span>
+                      <span className="font-bold text-emerald-400">₹{f.finalPriceInr || 499}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Source Batches:</span>
+                      <span className="text-slate-300">{f.batches?.length || 1} lots</span>
+                    </div>
+                    {f.txHash && (
+                      <div className="flex justify-between truncate">
+                        <span className="text-slate-500">Tx Hash:</span>
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${f.txHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-400 hover:underline truncate max-w-[140px]"
+                        >
+                          {f.txHash}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dynamic QR Code */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(`${window.location.origin}/verify/${f.id}`)}`}
+                      alt="Product QR Passport"
+                      className="w-16 h-16 rounded-lg bg-white p-1 shadow"
+                    />
+                    <a
+                      href={`/verify/${f.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                    >
+                      <span>🔍 View Passport</span>
+                      <span>↗</span>
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

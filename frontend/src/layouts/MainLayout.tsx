@@ -2,33 +2,23 @@ import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ReviewQueueModal } from '../components/ReviewQueueModal';
 import { AuthModal, type UserRole } from '../components/AuthModal';
+import { useLanguage, LANGUAGES } from '../context/LanguageContext';
 
 const navItems = [
-  { path: '/', label: 'Home', icon: '🏠' },
-  { path: '/collector', label: 'Collector', icon: '🌿' },
-  { path: '/aggregator', label: 'Aggregator', icon: '🏭' },
-  { path: '/lab', label: 'Lab', icon: '🧪' },
-  { path: '/manufacturer', label: 'Manufacturer', icon: '💊' },
-  { path: '/verify', label: 'Verify', icon: '🔍' },
+  { path: '/', key: 'nav.home', defaultLabel: 'Home', icon: '🏠' },
+  { path: '/collector', key: 'nav.collector', defaultLabel: 'Collector', icon: '🌿' },
+  { path: '/aggregator', key: 'nav.aggregator', defaultLabel: 'Aggregator', icon: '🏭' },
+  { path: '/lab', key: 'nav.lab', defaultLabel: 'Quality Lab', icon: '🧪' },
+  { path: '/manufacturer', key: 'nav.manufacturer', defaultLabel: 'Manufacturer', icon: '💊' },
+  { path: '/verify', key: 'nav.verify', defaultLabel: 'Verify', icon: '🔍' },
+  { path: '/admin', key: 'nav.admin', defaultLabel: 'Admin & Ops', icon: '🛡️' },
 ];
-
-const pageTitles: Record<string, string> = {
-  '/': 'Overview',
-  '/collector': 'Collector Dashboard',
-  '/aggregator': 'Aggregator Dashboard',
-  '/lab': 'Quality Lab',
-  '/manufacturer': 'Manufacturer Portal',
-  '/verify': 'Chain Verification',
-  '/admin': 'Protocol Operations & Admin',
-};
-
-type Role = 'ALL' | 'ADMIN' | 'COLLECTOR' | 'AGGREGATOR' | 'LAB' | 'MANUFACTURER' | 'CONSUMER';
 
 export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
-  const [activeRole, setActiveRole] = useState<Role>('ALL');
+  const { language, setLanguage, t } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showReviewQueue, setShowReviewQueue] = useState(false);
 
@@ -73,20 +63,14 @@ export default function MainLayout() {
   };
 
   const getPageTitle = () => {
-    if (currentPath.startsWith('/verify/')) return 'Chain Verification';
-    return pageTitles[currentPath] || 'Dashboard';
+    if (currentPath.startsWith('/verify')) return t('title.verify', 'Chain Verification');
+    if (currentPath.startsWith('/collector')) return t('title.collector', 'Collector Field Portal');
+    if (currentPath.startsWith('/aggregator')) return t('title.aggregator', 'Aggregator Mandi Hub');
+    if (currentPath.startsWith('/lab')) return t('title.lab', 'Quality Lab');
+    if (currentPath.startsWith('/manufacturer')) return t('title.manufacturer', 'Manufacturer Portal');
+    if (currentPath.startsWith('/admin')) return t('title.admin', 'Protocol Operations & Admin');
+    return t('title.home', 'Overview');
   };
-
-  const filteredNavItems = navItems.filter(item => {
-    if (activeRole === 'ALL') return true;
-    if (item.path === '/' || item.path.startsWith('/verify')) return true;
-    if (activeRole === 'ADMIN' && item.path === '/admin') return true;
-    if (activeRole === 'COLLECTOR' && item.path === '/collector') return true;
-    if (activeRole === 'AGGREGATOR' && item.path === '/aggregator') return true;
-    if (activeRole === 'LAB' && item.path === '/lab') return true;
-    if (activeRole === 'MANUFACTURER' && item.path === '/manufacturer') return true;
-    return false;
-  });
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
@@ -135,7 +119,7 @@ export default function MainLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {filteredNavItems.map((item) => {
+          {navItems.map((item) => {
             const isActive = item.path === '/'
               ? currentPath === '/'
               : currentPath.startsWith(item.path);
@@ -147,7 +131,7 @@ export default function MainLayout() {
                 onClick={closeMobileMenu}
               >
                 <span className="sidebar-link-icon">{item.icon}</span>
-                <span>{item.label}</span>
+                <span>{t(item.key, item.defaultLabel)}</span>
               </Link>
             );
           })}
@@ -155,10 +139,12 @@ export default function MainLayout() {
 
         <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <p style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Network</p>
+            <p style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              {t('nav.network', 'Network')}
+            </p>
             <p style={{ fontSize: '13px', color: '#f8fafc', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255,255,255,0.6)', flexShrink: 0 }}></span>
-              Sepolia Testnet
+              {t('nav.sepolia', 'Sepolia Testnet')}
             </p>
           </div>
         </div>
@@ -182,6 +168,23 @@ export default function MainLayout() {
           <span className="app-header-breadcrumb hidden-mobile">{currentPath === '/' ? 'Home' : currentPath.slice(1).split('/')[0]}</span>
 
           <div className="ml-auto flex items-center gap-2.5" style={{ pointerEvents: 'auto' }}>
+            {/* Global Language Switcher */}
+            <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-1 text-xs shadow-inner">
+              <span className="text-sm">🌐</span>
+              <select
+                value={language}
+                onChange={e => setLanguage(e.target.value as any)}
+                className="bg-transparent text-white font-semibold text-xs outline-none cursor-pointer pr-1"
+                aria-label="Select Language"
+              >
+                {LANGUAGES.map(l => (
+                  <option key={l.code} value={l.code} className="bg-slate-900 text-white">
+                    {l.flag} {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               onClick={() => setShowReviewQueue(true)}
               className="bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
@@ -191,7 +194,7 @@ export default function MainLayout() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
-              <span className="hidden sm:inline">Review Queue</span>
+              <span className="hidden sm:inline">{t('nav.review_queue', 'Review Queue')}</span>
             </button>
 
             {/* Stakeholder Profile or Login Button */}
@@ -209,7 +212,7 @@ export default function MainLayout() {
                   className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg border border-slate-700 font-semibold transition ml-1"
                   title="Switch Active Stakeholder"
                 >
-                  Switch
+                  {t('nav.switch', 'Switch')}
                 </button>
                 <button
                   onClick={handleLogout}
@@ -225,23 +228,9 @@ export default function MainLayout() {
                 className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
               >
                 <span>🔑</span>
-                <span>Stakeholder Login</span>
+                <span>{t('nav.login', 'Stakeholder Login')}</span>
               </button>
             )}
-
-            <select
-              value={activeRole}
-              onChange={e => setActiveRole(e.target.value as Role)}
-              className="role-select text-xs hidden md:block"
-            >
-              <option value="ALL">🌐 All Portals (Auditor)</option>
-              <option value="ADMIN">🛡️ Admin & Ops</option>
-              <option value="COLLECTOR">👨🏽‍🌾 Collector</option>
-              <option value="AGGREGATOR">🏭 Aggregator</option>
-              <option value="LAB">🧪 Quality Lab</option>
-              <option value="MANUFACTURER">💊 Manufacturer</option>
-              <option value="CONSUMER">🔍 Verify (Consumer)</option>
-            </select>
           </div>
         </header>
 

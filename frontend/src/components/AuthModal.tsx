@@ -12,21 +12,19 @@ interface AuthModalProps {
   onSuccess: (user: any) => void;
 }
 
-const roleDescriptions: Record<UserRole, { title: string; icon: string; desc: string; sampleName: string; defaultPhone: string; defaultEmail: string }> = {
+const roleDescriptions: Record<UserRole, { title: string; icon: string; desc: string; sampleName: string; defaultEmail: string }> = {
   COLLECTOR: {
     title: 'Botanical Harvester',
     icon: '🌿',
     desc: 'Log wild harvests with GPS geofencing, PlantNet AI vision, and receive instant ERC-4337 payouts.',
     sampleName: 'Ramesh Patel',
-    defaultPhone: '9876543210',
-    defaultEmail: 'ramesh.patel@mulpath.com'
+    defaultEmail: 'farmer.ramesh@mulpath.com'
   },
   AGGREGATOR: {
     title: 'Mandi Depot Aggregator',
     icon: '🏭',
     desc: 'Receive assigned field bags, verify scale weights, and dispatch NFC sealed vials to testing labs.',
     sampleName: 'Shakti Enterprises Mandi',
-    defaultPhone: '9876543211',
     defaultEmail: 'shakti.mandi@mulpath.com'
   },
   LAB: {
@@ -34,7 +32,6 @@ const roleDescriptions: Record<UserRole, { title: string; icon: string; desc: st
     icon: '🧪',
     desc: 'Receive assigned sample vials, perform HPLC chemical purity assays, and anchor certificates on-chain.',
     sampleName: 'Ayush Analytical Labs',
-    defaultPhone: '9876543212',
     defaultEmail: 'qa.lab@mulpath.com'
   },
   MANUFACTURER: {
@@ -42,7 +39,6 @@ const roleDescriptions: Record<UserRole, { title: string; icon: string; desc: st
     icon: '💊',
     desc: 'Purchase certified lots, formulate retail blends, and generate tamper-proof consumer QR codes.',
     sampleName: 'Dabur Organic Formulations',
-    defaultPhone: '9876543213',
     defaultEmail: 'manufacturing@dabur-organic.com'
   },
   ADMIN: {
@@ -50,7 +46,6 @@ const roleDescriptions: Record<UserRole, { title: string; icon: string; desc: st
     icon: '🛡️',
     desc: 'Global supply chain telemetry, anti-fraud queue resolution, and Ethereum Sepolia contracts audit.',
     sampleName: 'Mūlpath Protocol Auditor',
-    defaultPhone: '9876543214',
     defaultEmail: 'admin@mulpath.com'
   }
 };
@@ -62,9 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess
 }) => {
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole === 'ADMIN' ? 'COLLECTOR' : initialRole);
-  const [authMethod, setAuthMethod] = useState<'PHONE' | 'EMAIL'>('PHONE');
   const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
-  const [phone, setPhone] = useState(roleDescriptions[initialRole].defaultPhone);
   const [email, setEmail] = useState(roleDescriptions[initialRole].defaultEmail);
   const [userName, setUserName] = useState(roleDescriptions[initialRole].sampleName);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -76,7 +69,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     if (initialRole && initialRole !== 'ADMIN') {
       setSelectedRole(initialRole);
-      setPhone(roleDescriptions[initialRole].defaultPhone);
       setEmail(roleDescriptions[initialRole].defaultEmail);
       setUserName(roleDescriptions[initialRole].sampleName);
     }
@@ -94,7 +86,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleRoleSelect = (role: UserRole) => {
     setSelectedRole(role);
-    setPhone(roleDescriptions[role].defaultPhone);
     setEmail(roleDescriptions[role].defaultEmail);
     setUserName(roleDescriptions[role].sampleName);
     setErrorMsg('');
@@ -104,22 +95,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     setErrorMsg('');
 
-    const payload: { phone?: string; email?: string } = {};
-
-    if (authMethod === 'PHONE') {
-      const cleanPhone = phone.replace(/\D/g, '');
-      if (cleanPhone.length !== 10) {
-        setErrorMsg('Please enter a valid 10-digit Indian mobile number.');
-        return;
-      }
-      payload.phone = cleanPhone;
-    } else {
-      const cleanEmail = email.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-        setErrorMsg('Please enter a valid email address.');
-        return;
-      }
-      payload.email = cleanEmail;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
     }
 
     setIsLoading(true);
@@ -127,7 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ email: cleanEmail })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -181,7 +160,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg('');
     const fullOtp = otp.join('');
     if (fullOtp.length !== 6) {
-      setErrorMsg('Please enter all 6 digits of your OTP code.');
+      setErrorMsg('Please enter all 6 digits of your verification code.');
       return;
     }
 
@@ -189,15 +168,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const payload: any = {
         otp: fullOtp,
+        email: email.trim().toLowerCase(),
         name: userName,
         role: selectedRole
       };
-
-      if (authMethod === 'PHONE') {
-        payload.phone = phone.replace(/\D/g, '');
-      } else {
-        payload.email = email.trim().toLowerCase();
-      }
 
       const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
@@ -242,10 +216,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {roleDescriptions[selectedRole].icon}
           </div>
           <h3 className="text-xl font-black text-white tracking-tight">
-            Stakeholder Gateway & Login
+            Stakeholder Gateway & Email Login
           </h3>
           <p className="text-xs text-slate-400">
-            Authenticate with your Mobile Phone or Email Address to access your isolated workspace.
+            Enter your email address to receive your instant verification code.
           </p>
         </div>
 
@@ -284,39 +258,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <span className="text-emerald-400 font-bold">{roleDescriptions[selectedRole].title}: </span>
               <span>{roleDescriptions[selectedRole].desc}</span>
             </div>
-
-            {/* Auth Method Switcher (Phone vs Email) */}
-            <div className="pt-2">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                2. Choose Authentication Method:
-              </label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => { setAuthMethod('PHONE'); setErrorMsg(''); }}
-                  className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${
-                    authMethod === 'PHONE'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <span>📱</span>
-                  <span>Mobile Phone (+91)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAuthMethod('EMAIL'); setErrorMsg(''); }}
-                  className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${
-                    authMethod === 'EMAIL'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <span>✉️</span>
-                  <span>Email Address</span>
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -338,41 +279,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </div>
 
-              {authMethod === 'PHONE' ? (
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Indian Mobile Number (+91)
-                  </label>
-                  <div className="flex gap-2">
-                    <span className="px-3.5 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 font-mono text-sm font-semibold flex items-center">
-                      🇮🇳 +91
-                    </span>
-                    <input
-                      type="tel"
-                      maxLength={10}
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                      className="input-field text-sm font-mono flex-1 tracking-wider"
-                      placeholder="9876543210"
-                      required
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Business / Stakeholder Email
-                  </label>
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Stakeholder Email Address
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-3 text-slate-400 text-sm">✉️</span>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="input-field text-sm font-mono"
-                    placeholder="user@example.com"
+                    className="input-field text-sm font-mono pl-9"
+                    placeholder="stakeholder@ayush.org"
                     required
                   />
                 </div>
-              )}
+              </div>
             </div>
 
             {errorMsg && (
@@ -382,7 +304,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
 
             <Button type="submit" disabled={isLoading} className="w-full py-3 text-sm font-bold shadow-lg">
-              {isLoading ? 'Requesting Code...' : `Send Verification Code via ${authMethod === 'EMAIL' ? 'Email' : 'SMS'} ➔`}
+              {isLoading ? 'Requesting Code...' : 'Send Email Verification Code ➔'}
             </Button>
           </form>
         ) : (
@@ -392,7 +314,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Enter the 6-digit verification code sent to:
               </p>
               <p className="font-mono text-sm font-bold text-emerald-400">
-                {authMethod === 'EMAIL' ? email : `+91 ${phone}`}
+                {email}
                 <button
                   type="button"
                   onClick={() => setStep('INPUT')}
