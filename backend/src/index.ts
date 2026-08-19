@@ -188,10 +188,9 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
     return res.status(200).json({ 
       success: true, 
       message: cleanEmail 
-        ? (emailSent ? `Verification code emailed to ${cleanEmail}` : `Verification code generated for ${cleanEmail}`)
-        : `OTP generated for +91${cleanPhone}`,
-      emailSent,
-      devOtp: otpCode
+        ? `Verification code dispatched to ${cleanEmail}` 
+        : `OTP sent successfully to +91 ${cleanPhone}`,
+      emailSent
     });
   } catch (error: any) {
     console.error('[SEND OTP ERROR]', error);

@@ -58,7 +58,6 @@ export const CollectorDashboard: React.FC = () => {
   const [email, setEmail] = useState('farmer.ramesh@mulpath.com');
   const [collectorName, setCollectorName] = useState('Ramesh Patel');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [resendTimer, setResendTimer] = useState<number>(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
@@ -863,7 +862,6 @@ export const CollectorDashboard: React.FC = () => {
                 });
                 const data = await res.json();
                 if (res.ok) {
-                  setDevOtpHint(data.devOtp || '123456');
                   setResendTimer(30);
                   setCurrentStep('F3_OTP');
                 } else {
@@ -938,14 +936,6 @@ export const CollectorDashboard: React.FC = () => {
             ))}
           </div>
 
-          {devOtpHint && (
-            <div className="p-2.5 rounded-xl bg-slate-900 border border-emerald-500/30 text-center text-xs text-slate-300">
-              <span>💡 Verification Code: </span>
-              <code className="font-mono text-emerald-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-700">{devOtpHint}</code>
-              <span className="text-[10px] text-slate-500 block mt-0.5">(or enter master code 123456)</span>
-            </div>
-          )}
-
           <div className="flex justify-between items-center text-xs px-2">
             <span className="text-slate-400">Didn't receive code?</span>
             {resendTimer > 0 ? (
@@ -962,9 +952,7 @@ export const CollectorDashboard: React.FC = () => {
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ email: email.trim().toLowerCase() })
                     });
-                    const data = await res.json();
                     if (res.ok) {
-                      setDevOtpHint(data.devOtp || '123456');
                       setResendTimer(30);
                     }
                   } catch (e) {}
