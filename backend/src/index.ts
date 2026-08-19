@@ -38,11 +38,12 @@ const getEmailTransporter = () => {
     });
   }
   if (process.env.GMAIL_USER && (process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD)) {
+    const rawPass = process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
     return nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD,
+        user: process.env.GMAIL_USER.trim(),
+        pass: rawPass.replace(/\s+/g, ''),
       },
     });
   }
