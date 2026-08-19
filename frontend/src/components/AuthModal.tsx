@@ -62,7 +62,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [email, setEmail] = useState(roleDescriptions[initialRole].defaultEmail);
   const [userName, setUserName] = useState(roleDescriptions[initialRole].sampleName);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [resendTimer, setResendTimer] = useState(30);
@@ -115,9 +114,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error(data.error || 'Failed to send OTP');
       }
 
-      if (data.devCode) {
-        setDevCode(data.devCode);
-      }
       setStep('OTP');
       setResendTimer(30);
       setOtp(['', '', '', '', '', '']);
@@ -126,11 +122,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleAutoFillCode = (code: string) => {
-    const chars = code.split('').slice(0, 6);
-    setOtp([chars[0] || '', chars[1] || '', chars[2] || '', chars[3] || '', chars[4] || '', chars[5] || '']);
   };
 
   const handleOtpChange = (index: number, val: string) => {
@@ -362,15 +353,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   Edit
                 </button>
               </p>
-            </div>
-
-            {/* Instant Click-to-Auto-fill Helper Badge */}
-            <div
-              onClick={() => handleAutoFillCode(devCode || '123456')}
-              className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs text-center cursor-pointer hover:bg-emerald-500/20 transition flex items-center justify-between"
-            >
-              <span className="font-semibold">🌿 Instant Code: <strong className="font-mono text-sm underline text-emerald-400">{devCode || '123456'}</strong></span>
-              <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/40 text-white">Click to auto-fill</span>
             </div>
 
             <div className="flex justify-center gap-2 py-2" onPaste={handleOtpPaste}>
