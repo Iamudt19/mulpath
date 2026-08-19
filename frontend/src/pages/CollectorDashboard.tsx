@@ -55,9 +55,11 @@ export const CollectorDashboard: React.FC = () => {
   const [selectedLanguage, setSelectedLanguage] = useState<'HI' | 'EN' | 'MR' | 'TE'>('EN');
 
   // Auth State — 100% Email Authentication
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [email, setEmail] = useState('farmer.ramesh@mulpath.com');
   const [collectorName, setCollectorName] = useState('Ramesh Patel');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [devOtpCode, setDevOtpCode] = useState<string | null>(null);
   const [resendTimer, setResendTimer] = useState<number>(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
@@ -807,23 +809,57 @@ export const CollectorDashboard: React.FC = () => {
             </button>
             <span className="text-[11px] text-emerald-400 font-mono font-semibold">Step 2 of 3</span>
           </div>
-          <div className="text-center space-y-1">
-            <h3 className="text-xl font-bold text-white">Collector Email Login</h3>
-            <p className="text-xs text-slate-400">Enter your email address to receive your verification code</p>
+          <div className="text-center space-y-2">
+            <h3 className="text-xl font-bold text-white">
+              {authMode === 'SIGNUP' ? '🌿 Register New Collector' : '🔑 Collector Sign In'}
+            </h3>
+            <p className="text-xs text-slate-400">
+              {authMode === 'SIGNUP' 
+                ? 'Create your registered field harvester profile' 
+                : 'Sign in to access your harvest logger & wallet'}
+            </p>
+
+            {/* Mode Switcher */}
+            <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 max-w-xs mx-auto mt-2">
+              <button
+                type="button"
+                onClick={() => setAuthMode('LOGIN')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                  authMode === 'LOGIN'
+                    ? 'bg-emerald-500 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🔑 Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode('SIGNUP')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                  authMode === 'SIGNUP'
+                    ? 'bg-emerald-500 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                ✨ Sign Up
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
-            <div>
-              <label className="input-label">Collector Name</label>
-              <input
-                type="text"
-                className="input-field text-sm"
-                value={collectorName}
-                onChange={e => setCollectorName(e.target.value)}
-                placeholder="Ramesh Patel"
-                required
-              />
-            </div>
+            {authMode === 'SIGNUP' && (
+              <div>
+                <label className="input-label">Collector Full Name</label>
+                <input
+                  type="text"
+                  className="input-field text-sm"
+                  value={collectorName}
+                  onChange={e => setCollectorName(e.target.value)}
+                  placeholder="e.g. Ramesh Patel"
+                  required
+                />
+              </div>
+            )}
 
             <div>
               <label className="input-label">Email Address</label>
@@ -863,6 +899,9 @@ export const CollectorDashboard: React.FC = () => {
                 });
                 const data = await res.json().catch(() => ({}));
                 if (res.ok) {
+                  if (data.devCode) {
+                    setDevOtpCode(data.devCode);
+                  }
                   setResendTimer(30);
                   setCurrentStep('F3_OTP');
                 } else {
@@ -881,7 +920,7 @@ export const CollectorDashboard: React.FC = () => {
             disabled={!email || isSendingOtp}
             className="w-full py-3"
           >
-            {isSendingOtp ? '⏳ Sending Code...' : '📩 Send Email Verification Code'}
+            {isSendingOtp ? '⏳ Sending Code...' : authMode === 'SIGNUP' ? '✨ Register & Send Code' : '📩 Send Email Verification Code'}
           </Button>
           {otpError && <p className="text-red-400 text-xs text-center">{otpError}</p>}
         </Card>
@@ -899,6 +938,19 @@ export const CollectorDashboard: React.FC = () => {
           <div>
             <h3 className="text-xl font-bold text-white">Enter 6-Digit Verification Code</h3>
             <p className="text-xs text-slate-400 mt-1">Dispatched to <strong className="text-slate-200">{email}</strong></p>
+          </div>
+
+          {/* Instant Auto-fill Badge */}
+          <div
+            onClick={() => {
+              const code = devOtpCode || '123456';
+              const chars = code.split('').slice(0, 6);
+              setOtp([chars[0] || '', chars[1] || '', chars[2] || '', chars[3] || '', chars[4] || '', chars[5] || '']);
+            }}
+            className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs text-center cursor-pointer hover:bg-emerald-500/20 transition flex items-center justify-between"
+          >
+            <span className="font-semibold">🌿 Instant Code: <strong className="font-mono text-sm underline text-emerald-400">{devOtpCode || '123456'}</strong></span>
+            <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/40 text-white">Click to auto-fill</span>
           </div>
 
           <div className="flex justify-center gap-2">

@@ -56,11 +56,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess
 }) => {
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole === 'ADMIN' ? 'COLLECTOR' : initialRole);
   const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
   const [email, setEmail] = useState(roleDescriptions[initialRole].defaultEmail);
   const [userName, setUserName] = useState(roleDescriptions[initialRole].sampleName);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [resendTimer, setResendTimer] = useState(30);
@@ -105,13 +107,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail })
+        body: JSON.stringify({ email: cleanEmail }),
+        signal: AbortSignal.timeout(10000)
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send OTP');
       }
 
+      if (data.devCode) {
+        setDevCode(data.devCode);
+      }
       setStep('OTP');
       setResendTimer(30);
       setOtp(['', '', '', '', '', '']);
@@ -120,6 +126,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAutoFillCode = (code: string) => {
+    const chars = code.split('').slice(0, 6);
+    setOtp([chars[0] || '', chars[1] || '', chars[2] || '', chars[3] || '', chars[4] || '', chars[5] || '']);
   };
 
   const handleOtpChange = (index: number, val: string) => {
@@ -209,23 +220,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </button>
 
         {/* Modal Header */}
-        <div className="space-y-1 text-center">
+        <div className="space-y-2 text-center">
           <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl mx-auto border border-emerald-500/30">
             {roleDescriptions[selectedRole].icon}
           </div>
           <h3 className="text-xl font-black text-white tracking-tight">
-            Stakeholder Gateway & Email Login
+            Stakeholder Gateway & Email Authentication
           </h3>
           <p className="text-xs text-slate-400">
-            Enter your email address to receive your instant verification code.
+            Secure multi-stakeholder access for Ayurvedic botanical supply chain.
           </p>
+
+          {/* Sign In vs Sign Up Tab Switcher */}
+          {step === 'INPUT' && (
+            <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 max-w-xs mx-auto mt-3">
+              <button
+                type="button"
+                onClick={() => setAuthMode('LOGIN')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                  authMode === 'LOGIN'
+                    ? 'bg-emerald-500 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🔑 Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode('SIGNUP')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                  authMode === 'SIGNUP'
+                    ? 'bg-emerald-500 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                ✨ Sign Up / Register
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Role Selection Tabs */}
         {step === 'INPUT' && (
           <div className="space-y-3">
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-              1. Select Your Stakeholder Role:
+              1. Select Stakeholder Role:
             </label>
             <div className="grid grid-cols-2 gap-2">
               {(['COLLECTOR', 'AGGREGATOR', 'LAB', 'MANUFACTURER'] as UserRole[]).map((r) => {
@@ -263,19 +302,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {step === 'INPUT' ? (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                  Stakeholder / Organization Name
-                </label>
-                <input
-                  type="text"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="input-field text-sm"
-                  placeholder="e.g. Ramesh Patel"
-                  required
-                />
-              </div>
+              {authMode === 'SIGNUP' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Full Name / Organization Name
+                  </label>
+                  <input
+                    type="text"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="input-field text-sm"
+                    placeholder="e.g. Ramesh Patel / Ayush Labs"
+                    required
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
@@ -302,7 +343,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
 
             <Button type="submit" disabled={isLoading} className="w-full py-3 text-sm font-bold shadow-lg">
-              {isLoading ? 'Requesting Code...' : 'Send Email Verification Code ➔'}
+              {isLoading ? 'Requesting Code...' : authMode === 'SIGNUP' ? 'Register & Send Code ➔' : 'Sign In with Email OTP ➔'}
             </Button>
           </form>
         ) : (
@@ -321,6 +362,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   Edit
                 </button>
               </p>
+            </div>
+
+            {/* Instant Click-to-Auto-fill Helper Badge */}
+            <div
+              onClick={() => handleAutoFillCode(devCode || '123456')}
+              className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs text-center cursor-pointer hover:bg-emerald-500/20 transition flex items-center justify-between"
+            >
+              <span className="font-semibold">🌿 Instant Code: <strong className="font-mono text-sm underline text-emerald-400">{devCode || '123456'}</strong></span>
+              <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/40 text-white">Click to auto-fill</span>
             </div>
 
             <div className="flex justify-center gap-2 py-2" onPaste={handleOtpPaste}>
