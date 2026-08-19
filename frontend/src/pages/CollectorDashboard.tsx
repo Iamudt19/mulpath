@@ -858,19 +858,25 @@ export const CollectorDashboard: React.FC = () => {
                 const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ email: cleanEmail })
+                  body: JSON.stringify({ email: cleanEmail }),
+                  signal: AbortSignal.timeout(10000)
                 });
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
                 if (res.ok) {
                   setResendTimer(30);
                   setCurrentStep('F3_OTP');
                 } else {
                   setOtpError(data.error || 'Failed to send verification code.');
                 }
-              } catch (e) {
-                setOtpError('Network error. Check connection.');
+              } catch (e: any) {
+                if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+                  setOtpError('Server response took too long. Check Render backend status.');
+                } else {
+                  setOtpError('Network error. Check connection to backend.');
+                }
+              } finally {
+                setIsSendingOtp(false);
               }
-              setIsSendingOtp(false);
             }}
             disabled={!email || isSendingOtp}
             className="w-full py-3"
@@ -950,13 +956,17 @@ export const CollectorDashboard: React.FC = () => {
                     const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email: email.trim().toLowerCase() })
+                      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+                      signal: AbortSignal.timeout(10000)
                     });
                     if (res.ok) {
                       setResendTimer(30);
                     }
-                  } catch (e) {}
-                  setIsSendingOtp(false);
+                  } catch (e: any) {
+                    setOtpError('Failed to resend code. Please try again.');
+                  } finally {
+                    setIsSendingOtp(false);
+                  }
                 }}
                 className="text-emerald-400 font-semibold hover:underline"
               >
@@ -981,9 +991,10 @@ export const CollectorDashboard: React.FC = () => {
                     name: collectorName,
                     role: 'COLLECTOR',
                     language: selectedLanguage
-                  })
+                  }),
+                  signal: AbortSignal.timeout(10000)
                 });
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
                 if (res.ok && data.user) {
                   localStorage.setItem('mulpath_token', data.token);
                   localStorage.setItem('mulpath_user', JSON.stringify(data.user));
@@ -994,10 +1005,11 @@ export const CollectorDashboard: React.FC = () => {
                 } else {
                   setOtpError(data.error || 'Invalid OTP code.');
                 }
-              } catch (e) {
-                setOtpError('Authentication failed.');
+              } catch (e: any) {
+                setOtpError('Verification failed. Check network connection.');
+              } finally {
+                setIsVerifyingOtp(false);
               }
-              setIsVerifyingOtp(false);
             }}
             disabled={otp.join('').length !== 6 || isVerifyingOtp}
             className="w-full py-3 font-bold"

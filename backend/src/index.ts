@@ -31,6 +31,9 @@ const getEmailTransporter = () => {
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_PORT === '465',
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 7000,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -41,6 +44,9 @@ const getEmailTransporter = () => {
     const rawPass = process.env.GMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '';
     return nodemailer.createTransport({
       service: 'gmail',
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 7000,
       auth: {
         user: process.env.GMAIL_USER.trim(),
         pass: rawPass.replace(/\s+/g, ''),
@@ -155,7 +161,7 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
       const transporter = getEmailTransporter();
       if (transporter) {
         try {
-          await transporter.sendMail({
+          const mailPromise = transporter.sendMail({
             from: process.env.EMAIL_FROM || process.env.GMAIL_USER || process.env.SMTP_USER || '"Mūlpath Traceability" <auth@mulpath.org>',
             to: cleanEmail,
             subject: `🌿 ${otpCode} is your Mūlpath verification code`,
@@ -176,6 +182,13 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
               </div>
             `
           });
+
+          // Timeout email after 6s to prevent response hanging
+          await Promise.race([
+            mailPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Email dispatch timeout (6s)')), 6000))
+          ]);
+
           emailSent = true;
           console.log(`[EMAIL OTP SENT] Successfully dispatched code to ${cleanEmail}`);
         } catch (err: any) {
