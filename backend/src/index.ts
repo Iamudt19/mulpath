@@ -195,76 +195,79 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
 
     let emailSent = false;
     if (cleanEmail) {
-      const transporter = getEmailTransporter();
-      if (transporter) {
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 540px; margin: auto; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.3);">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #10b981; margin: 0; font-size: 24px;">🌿 Mūlpath</h1>
+            <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Ayurvedic Botanical Traceability Network</p>
+          </div>
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
+            <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 12px;">Use the verification code below to authenticate your stakeholder account:</p>
+            <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #34d399; font-family: monospace; padding: 12px; background: #0f172a; border-radius: 8px; display: inline-block;">
+              ${otpCode}
+            </div>
+            <p style="font-size: 11px; color: #94a3b8; margin-top: 12px;">Valid for 10 minutes. Never share this code with anyone.</p>
+          </div>
+          <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0;">Securing transparent medicinal herb supply chains from forest to consumer.</p>
+        </div>
+      `;
+
+      // 1. Prioritize Resend HTTPS API (works over Port 443 on Render/Vercel/AWS without SMTP port blocks)
+      const resendKey = process.env.RESEND_API_KEY;
+      if (resendKey) {
         try {
-          const senderEmail = process.env.GMAIL_USER?.trim() || process.env.SMTP_USER || 'iamudt10@gmail.com';
-          const mailPromise = transporter.sendMail({
-            from: `"Mūlpath Traceability" <${senderEmail}>`,
-            to: cleanEmail,
-            subject: `🌿 ${otpCode} is your Mūlpath verification code`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 540px; margin: auto; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                <div style="text-align: center; margin-bottom: 20px;">
-                  <h1 style="color: #10b981; margin: 0; font-size: 24px;">🌿 Mūlpath</h1>
-                  <p style="color: #94a3b8; font-size: 13px; margin-top: 4px;">Ayurvedic Botanical Traceability Network</p>
-                </div>
-                <div style="background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
-                  <p style="font-size: 14px; color: #cbd5e1; margin-bottom: 12px;">Use the verification code below to authenticate your stakeholder account:</p>
-                  <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #34d399; font-family: monospace; padding: 12px; background: #0f172a; border-radius: 8px; display: inline-block;">
-                    ${otpCode}
-                  </div>
-                  <p style="font-size: 11px; color: #94a3b8; margin-top: 12px;">Valid for 10 minutes. Never share this code with anyone.</p>
-                </div>
-                <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0;">Securing transparent medicinal herb supply chains from forest to consumer.</p>
-              </div>
-            `
+          const resendRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              from: process.env.RESEND_FROM || 'Mūlpath Traceability <onboarding@resend.dev>',
+              to: cleanEmail,
+              subject: `🌿 ${otpCode} is your Mūlpath verification code`,
+              html: emailHtml
+            }),
+            signal: AbortSignal.timeout(8000)
           });
-
-          // Timeout email after 6s to prevent response hanging
-          await Promise.race([
-            mailPromise,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Email dispatch timeout (6s)')), 6000))
-          ]);
-
-          emailSent = true;
-          console.log(`[EMAIL OTP SENT] Successfully dispatched code to ${cleanEmail}`);
-        } catch (err: any) {
-          console.warn(`[EMAIL OTP WARN] Nodemailer dispatch failed for ${cleanEmail}:`, err?.message);
+          if (resendRes.ok) {
+            emailSent = true;
+            console.log(`[RESEND HTTPS SUCCESS] Verification code ${otpCode} dispatched to ${cleanEmail}`);
+          } else {
+            const errBody = await resendRes.text();
+            console.warn('[RESEND HTTP WARN]', errBody);
+          }
+        } catch (resendErr: any) {
+          console.warn('[RESEND HTTP ERROR]', resendErr.message);
         }
-      } else {
-        console.log(`[EMAIL OTP DEV MODE] SMTP not configured. Verification code for ${cleanEmail} is: ${otpCode}`);
       }
-    }
 
-    // If SMTP wasn't sent, try Resend HTTP API (works over port 443 HTTPS without SMTP restrictions)
-    if (cleanEmail && !emailSent && process.env.RESEND_API_KEY) {
-      try {
-        const resendRes = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: process.env.RESEND_FROM || 'Mūlpath <onboarding@resend.dev>',
-            to: cleanEmail,
-            subject: `🌿 ${otpCode} is your Mūlpath verification code`,
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 540px; margin: auto; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                <h1 style="color: #10b981; text-align: center;">🌿 Mūlpath Verification</h1>
-                <p style="text-align: center;">Your verification code is: <b style="font-size: 28px; color: #34d399; letter-spacing: 4px;">${otpCode}</b></p>
-                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Valid for 10 minutes.</p>
-              </div>
-            `
-          })
-        });
-        if (resendRes.ok) {
-          emailSent = true;
-          console.log(`[RESEND HTTP SENT] Dispatched code to ${cleanEmail}`);
+      // 2. Fallback to Nodemailer if not yet sent
+      if (!emailSent) {
+        const transporter = getEmailTransporter();
+        if (transporter) {
+          try {
+            const senderEmail = process.env.GMAIL_USER?.trim() || process.env.SMTP_USER || 'iamudt10@gmail.com';
+            const mailPromise = transporter.sendMail({
+              from: `"Mūlpath Traceability" <${senderEmail}>`,
+              to: cleanEmail,
+              subject: `🌿 ${otpCode} is your Mūlpath verification code`,
+              html: emailHtml
+            });
+
+            await Promise.race([
+              mailPromise,
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Email dispatch timeout (5s)')), 5000))
+            ]);
+
+            emailSent = true;
+            console.log(`[EMAIL OTP SENT] Successfully dispatched code to ${cleanEmail}`);
+          } catch (err: any) {
+            console.warn(`[EMAIL OTP WARN] Nodemailer dispatch failed for ${cleanEmail}:`, err?.message);
+          }
+        } else {
+          console.log(`[EMAIL OTP DEV MODE] SMTP not configured. Verification code for ${cleanEmail} is: ${otpCode}`);
         }
-      } catch (resendErr: any) {
-        console.warn('[RESEND HTTP ERROR]', resendErr.message);
       }
     }
 
@@ -273,8 +276,7 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response): Promise<any>
       message: cleanEmail 
         ? `Verification code dispatched to ${cleanEmail}` 
         : `OTP sent successfully to +91 ${cleanPhone}`,
-      emailSent,
-      devCode: otpCode
+      emailSent
     });
   } catch (error: any) {
     console.error('[SEND OTP ERROR]', error);

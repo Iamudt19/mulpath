@@ -26,6 +26,8 @@ services:
         sync: false
       - key: PLANTNET_API_KEY
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
       - key: GMAIL_USER
         value: iamudt10@gmail.com
       - key: GMAIL_APP_PASSWORD
