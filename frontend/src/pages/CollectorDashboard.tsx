@@ -17,6 +17,7 @@ L.Icon.Default.mergeOptions({
 
 import { API_BASE } from '../config';
 import { ImageComparisonSlider } from '../components/ImageComparisonSlider';
+import { GradCAMOverlay } from '../components/GradCAMOverlay';
 
 type FarmerStep = 'F1_SPLASH' | 'F2_EMAIL' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
 
@@ -1669,6 +1670,18 @@ export const CollectorDashboard: React.FC = () => {
                   <strong className="text-amber-200">Live Camera Only:</strong> Do not capture computer screens or screenshots.
                 </li>
               </ul>
+            </div>
+          )}
+
+          {/* 🔥 Grad-CAM XAI — Explainable AI Heatmap */}
+          {photoBlobUrl && aiStatus !== 'REJECTED' && (
+            <div className="animate-fade-in-up">
+              <GradCAMOverlay
+                imageSrc={photoBlobUrl}
+                species={species}
+                confidence={aiConfidence}
+                onHeatmapGenerated={(url) => setHeatmapBlobUrl(url)}
+              />
             </div>
           )}
 
