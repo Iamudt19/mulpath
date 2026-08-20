@@ -3,7 +3,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { formatDualCurrency } from '../utils/currency';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
+import { API_BASE } from '../config';
 
 interface AdminStats {
   totalBatches: number;

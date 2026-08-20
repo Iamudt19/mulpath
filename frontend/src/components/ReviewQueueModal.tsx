@@ -13,7 +13,7 @@ export interface FlaggedItem {
   status: 'PENDING' | 'RESOLVED' | 'REJECTED';
 }
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
+import { API_BASE } from '../config';
 
 export const ReviewQueueModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const [items, setItems] = useState<FlaggedItem[]>([]);
