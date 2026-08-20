@@ -4,7 +4,7 @@ import { Button } from '../components/Button';
 import { formatDualCurrency } from '../utils/currency';
 import { BlockchainTxModal } from '../components/BlockchainTxModal';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
+import { API_BASE } from '../config';
 
 interface IncomingBag {
   id: number;

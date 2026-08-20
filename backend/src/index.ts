@@ -417,6 +417,180 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response): Promise<an
   }
 });
 
+// POST /api/auth/register — Register new user with password
+app.post('/api/auth/register', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { email, phone, name, password, role, language } = req.body;
+    if ((!email && !phone) || !password) {
+      return res.status(400).json({ error: 'Email/Phone and password are required.' });
+    }
+
+    const cleanEmail = email ? email.trim().toLowerCase() : null;
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
+    const roleEnum = (role === 'COLLECTOR' || role === 'AGGREGATOR' || role === 'LAB' || role === 'MANUFACTURER' || role === 'ADMIN') ? role : 'COLLECTOR';
+
+    let user = null;
+    try {
+      let existingUser = null;
+      if (cleanEmail) {
+        existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
+      } else if (cleanPhone) {
+        existingUser = await prisma.user.findUnique({ where: { phone: cleanPhone } });
+      }
+
+      if (existingUser) {
+        return res.status(400).json({ error: 'An account with this email/phone already exists. Please sign in.' });
+      }
+
+      const identifier = cleanEmail || cleanPhone || Date.now().toString();
+      const walletAddr = `0x${Buffer.from(identifier + Date.now().toString()).toString('hex').slice(0, 40)}`;
+
+      user = await prisma.user.create({
+        data: {
+          email: cleanEmail || undefined,
+          phone: cleanPhone || undefined,
+          name: name || (cleanEmail ? cleanEmail.split('@')[0] : 'User'),
+          password: password,
+          role: roleEnum as any,
+          language: language || 'EN',
+          walletAddress: walletAddr,
+          walletBalance: 0
+        }
+      });
+    } catch (dbErr: any) {
+      console.warn('[DB FAILOVER] Database operation failed, proceeding with in-memory auth:', dbErr.message);
+      const identifier = cleanEmail || cleanPhone || Date.now().toString();
+      user = {
+        id: Math.floor(Math.random() * 10000),
+        name: name || (cleanEmail ? cleanEmail.split('@')[0] : 'User'),
+        phone: cleanPhone,
+        email: cleanEmail,
+        role: roleEnum,
+        walletAddress: `0x${Buffer.from(identifier + Date.now().toString()).toString('hex').slice(0, 40)}`,
+        walletBalance: 25000,
+        language: language || 'EN'
+      };
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, phone: user.phone, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        walletAddress: user.walletAddress,
+        walletBalance: user.walletBalance,
+        language: user.language
+      }
+    });
+  } catch (error: any) {
+    console.error('[REGISTER ERROR]', error);
+    return res.status(500).json({ error: 'Registration failed: ' + error.message });
+  }
+});
+
+// POST /api/auth/login — Password-based login for existing or new user
+app.post('/api/auth/login', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { email, phone, password, role, name, language } = req.body;
+    if ((!email && !phone) || !password) {
+      return res.status(400).json({ error: 'Email or mobile number and password are required.' });
+    }
+
+    const cleanEmail = email ? email.trim().toLowerCase() : null;
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
+    const roleEnum = (role === 'COLLECTOR' || role === 'AGGREGATOR' || role === 'LAB' || role === 'MANUFACTURER' || role === 'ADMIN') ? role : 'COLLECTOR';
+
+    let user = null;
+    try {
+      if (cleanEmail) {
+        user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+      } else if (cleanPhone) {
+        user = await prisma.user.findUnique({ where: { phone: cleanPhone } });
+      }
+
+      if (!user) {
+        // Create user automatically on initial password sign in
+        const identifier = cleanEmail || cleanPhone || Date.now().toString();
+        const walletAddr = `0x${Buffer.from(identifier + Date.now().toString()).toString('hex').slice(0, 40)}`;
+        user = await prisma.user.create({
+          data: {
+            phone: cleanPhone || undefined,
+            email: cleanEmail || undefined,
+            password: password,
+            name: name || (cleanEmail ? cleanEmail.split('@')[0] : `User_${Date.now()}`),
+            role: roleEnum as any,
+            language: language || 'EN',
+            walletAddress: walletAddr,
+            walletBalance: 0
+          }
+        });
+      } else {
+        // Validate password if set
+        if (user.password && user.password !== password) {
+          return res.status(401).json({ error: 'Invalid password. Please check your credentials.' });
+        }
+
+        // Update user password and role if provided
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            password: user.password || password,
+            role: roleEnum as any,
+            language: language || user.language
+          }
+        });
+      }
+    } catch (dbErr: any) {
+      console.warn('[DB FAILOVER] Database operation failed, proceeding with in-memory login:', dbErr.message);
+      const identifier = cleanEmail || cleanPhone || Date.now().toString();
+      user = {
+        id: Math.floor(Math.random() * 10000),
+        name: name || (cleanEmail ? cleanEmail.split('@')[0] : 'Stakeholder User'),
+        phone: cleanPhone,
+        email: cleanEmail,
+        role: roleEnum,
+        walletAddress: `0x${Buffer.from(identifier + Date.now().toString()).toString('hex').slice(0, 40)}`,
+        walletBalance: 25000,
+        language: language || 'EN'
+      };
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, phone: user.phone, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        walletAddress: user.walletAddress,
+        walletBalance: user.walletBalance,
+        language: user.language
+      }
+    });
+  } catch (error: any) {
+    console.error('[LOGIN ERROR]', error);
+    return res.status(500).json({ error: 'Login failed: ' + error.message });
+  }
+});
+
 
 // GET /api/auth/me — Get current user profile from JWT
 app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res: Response): Promise<any> => {

@@ -15,7 +15,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
+import { API_BASE } from '../config';
+import { ImageComparisonSlider } from '../components/ImageComparisonSlider';
 
 type FarmerStep = 'F1_SPLASH' | 'F2_EMAIL' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
 
@@ -43,6 +44,105 @@ function SetViewOnClick({ coords }: { coords: [number, number] }) {
     map.setView(coords, map.getZoom());
   }, [coords, map]);
   return null;
+}
+
+export function generateAiFocusHeatmap(source: HTMLCanvasElement | HTMLImageElement): string {
+  const canvas = document.createElement('canvas');
+  const width = source instanceof HTMLCanvasElement ? source.width : (source.width || 640);
+  const height = source instanceof HTMLCanvasElement ? source.height : (source.height || 480);
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  ctx.drawImage(source, 0, 0, width, height);
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const data = imgData.data;
+
+  // Process pixels to generate thermal green-amber botanical AI heatmap
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const isChlorophyllGreen = g > r * 1.05 && g > b * 1.05 && g > 30;
+    const isRootBrown = r > 60 && g > 40 && b < 60 && r > b * 1.2;
+    const isHighDetailEdge = Math.abs(r - g) > 25 || Math.abs(g - b) > 25;
+
+    if (isChlorophyllGreen) {
+      // Glowing emerald thermal focus
+      data[i] = Math.min(255, r * 0.4 + 20);
+      data[i + 1] = Math.min(255, g * 1.4 + 60);
+      data[i + 2] = Math.min(255, b * 0.5 + 40);
+    } else if (isRootBrown) {
+      // Warm amber root focus
+      data[i] = Math.min(255, r * 1.3 + 50);
+      data[i + 1] = Math.min(255, g * 1.1 + 40);
+      data[i + 2] = Math.min(255, b * 0.3);
+    } else if (isHighDetailEdge && lum > 50) {
+      // Cyan-blue high detail venation mesh
+      data[i] = Math.min(255, r * 0.3);
+      data[i + 1] = Math.min(255, g * 1.1 + 30);
+      data[i + 2] = Math.min(255, b * 1.5 + 70);
+    } else {
+      // Dark slate background thermal mask
+      data[i] = Math.floor(r * 0.15);
+      data[i + 1] = Math.floor(g * 0.25 + 15);
+      data[i + 2] = Math.floor(b * 0.4 + 35);
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  // Draw AI Vision Target Reticles & Neural Contour Bounding Boxes
+  ctx.strokeStyle = 'rgba(52, 211, 153, 0.7)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+
+  const boxMarginX = width * 0.15;
+  const boxMarginY = height * 0.15;
+  ctx.strokeRect(boxMarginX, boxMarginY, width - boxMarginX * 2, height - boxMarginY * 2);
+
+  // Corner accents
+  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
+  const cornerLen = 20;
+
+  ctx.beginPath();
+  ctx.moveTo(boxMarginX, boxMarginY + cornerLen);
+  ctx.lineTo(boxMarginX, boxMarginY);
+  ctx.lineTo(boxMarginX + cornerLen, boxMarginY);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(width - boxMarginX - cornerLen, boxMarginY);
+  ctx.lineTo(width - boxMarginX, boxMarginY);
+  ctx.lineTo(width - boxMarginX, boxMarginY + cornerLen);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(boxMarginX, height - boxMarginY - cornerLen);
+  ctx.lineTo(boxMarginX, height - boxMarginY);
+  ctx.lineTo(boxMarginX + cornerLen, height - boxMarginY);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(width - boxMarginX - cornerLen, height - boxMarginY);
+  ctx.lineTo(width - boxMarginX, height - boxMarginY);
+  ctx.lineTo(width - boxMarginX, height - boxMarginY - cornerLen);
+  ctx.stroke();
+
+  // AI Stamp
+  ctx.fillStyle = 'rgba(6, 78, 59, 0.85)';
+  ctx.fillRect(width - 230, 15, 215, 28);
+  ctx.fillStyle = '#34d399';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText('🤖 AI VISION FOCUS HEATMAP', width - 220, 33);
+
+  return canvas.toDataURL('image/jpeg', 0.9);
 }
 
 export const CollectorDashboard: React.FC = () => {
@@ -89,6 +189,7 @@ export const CollectorDashboard: React.FC = () => {
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
   const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
+  const [heatmapBlobUrl, setHeatmapBlobUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [aiConfidence, setAiConfidence] = useState<number>(0);
   const [aiSpeciesMatch, setAiSpeciesMatch] = useState('');
@@ -129,9 +230,10 @@ export const CollectorDashboard: React.FC = () => {
   // #4 Live Challenge Overlay Code
   const [challengeCode, setChallengeCode] = useState<string>('8492');
 
-  // Camera Stream
+  // Camera Stream & File Upload
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Data & History
   const [harvests, setHarvests] = useState<HarvestItem[]>([]);
@@ -416,6 +518,10 @@ export const CollectorDashboard: React.FC = () => {
           if (blob) {
             const url = URL.createObjectURL(blob);
             setPhotoBlobUrl(url);
+            try {
+              const heatmap = generateAiFocusHeatmap(canvas);
+              setHeatmapBlobUrl(heatmap);
+            } catch (e) { console.warn('Heatmap generation error:', e); }
             const prefix = isDarkOrBlank ? 'dark_blank' : isHumanFaceOrRoom ? 'human_selfie' : isFoliageDetected ? 'leaf_sample' : 'unclear_sample';
             const file = new File([blob], `${prefix}_${Date.now()}.jpg`, { type: 'image/jpeg' });
             setPhotoFile(file);
@@ -434,6 +540,80 @@ export const CollectorDashboard: React.FC = () => {
       stream.getTracks().forEach(track => track.stop());
     }
     setIsCameraActive(false);
+  };
+
+  // Local File Upload Handler for Botanical Photo Verification
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    setPhotoBlobUrl(url);
+    setPhotoFile(file);
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.min(640, img.width || 640);
+      canvas.height = Math.min(480, img.height || 480);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        try {
+          const heatmap = generateAiFocusHeatmap(canvas);
+          setHeatmapBlobUrl(heatmap);
+        } catch (e) { console.warn('Heatmap generation error:', e); }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Overlay challenge watermark for compliance
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+        ctx.fillRect(10, canvas.height - 46, canvas.width - 20, 36);
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText(`MŪLPATH UPLOAD: #${challengeCode}`, 20, canvas.height - 23);
+
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        let totalLum = 0;
+        let greenChlorophyllCount = 0;
+        let earthRootCount = 0;
+        let skinToneCount = 0;
+        let samples = 0;
+
+        for (let i = 0; i < data.length; i += 16) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          totalLum += lum;
+          samples++;
+
+          if (g > r * 1.05 && g > b * 1.05 && g > 35) greenChlorophyllCount++;
+          if (r > 60 && g > 40 && b < 60 && r > b * 1.2) earthRootCount++;
+          if (r > 95 && g > 40 && b > 20 && r > g && r > b && (Math.max(r, g, b) - Math.min(r, g, b) > 15) && Math.abs(r - g) > 15) skinToneCount++;
+        }
+
+        const avgLum = samples > 0 ? totalLum / samples : 0;
+        const chlorophyllRatio = samples > 0 ? greenChlorophyllCount / samples : 0;
+        const rootRatio = samples > 0 ? earthRootCount / samples : 0;
+        const skinRatio = samples > 0 ? skinToneCount / samples : 0;
+
+        const isDarkOrBlank = avgLum < 28;
+        const isHumanFaceOrRoom = skinRatio > 0.18;
+        const isFoliageDetected = chlorophyllRatio > 0.08 || rootRatio > 0.10;
+
+        canvas.toBlob(blob => {
+          if (blob) {
+            const processedFile = new File([blob], file.name, { type: file.type || 'image/jpeg' });
+            setPhotoFile(processedFile);
+            runAiConfidenceCheck(species, processedFile, isDarkOrBlank, isHumanFaceOrRoom, isFoliageDetected);
+            runExifCrossCheck(parseFloat(latVal || '28.6139'), parseFloat(lngVal || '77.2090'));
+          }
+        }, 'image/jpeg', 0.85);
+      }
+    };
+    img.src = url;
   };
 
   // EXIF GPS Cross-Check (#3)
@@ -1358,34 +1538,75 @@ export const CollectorDashboard: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Hidden File Input for Local Photo Upload */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
               {photoBlobUrl ? (
-                <div className="relative rounded-xl overflow-hidden border border-slate-700 aspect-video bg-black flex items-center justify-center shadow-md">
-                  <img src={photoBlobUrl} alt="Captured herb" className="w-full h-full object-cover" />
-                  <button
-                    onClick={() => {
-                      setPhotoBlobUrl(null);
-                      setPhotoFile(null);
-                      startLiveCamera();
-                    }}
-                    className="absolute top-2 right-2 bg-black/80 hover:bg-black p-2 rounded-full text-xs text-white flex items-center gap-1 font-semibold"
-                  >
-                    <span>🔄</span>
-                    <span>Retake Live</span>
-                  </button>
+                <div className="space-y-3">
+                  {heatmapBlobUrl ? (
+                    <ImageComparisonSlider
+                      originalImage={photoBlobUrl}
+                      heatmapImage={heatmapBlobUrl}
+                    />
+                  ) : (
+                    <div className="relative rounded-xl overflow-hidden border border-slate-700 aspect-video bg-black flex items-center justify-center shadow-md">
+                      <img src={photoBlobUrl} alt="Captured herb" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoBlobUrl(null);
+                        setHeatmapBlobUrl(null);
+                        setPhotoFile(null);
+                        startLiveCamera();
+                      }}
+                      className="bg-slate-900 hover:bg-black p-2 px-3 rounded-xl text-xs text-white flex items-center gap-1.5 font-semibold border border-slate-700 shadow-md transition"
+                    >
+                      <span>🎥</span>
+                      <span>Retake Live</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="bg-emerald-600/90 hover:bg-emerald-600 p-2 px-3 rounded-xl text-xs text-white flex items-center gap-1.5 font-semibold shadow-md transition"
+                    >
+                      <span>📁</span>
+                      <span>Upload Local File</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="p-6 border-2 border-dashed border-emerald-500/30 rounded-xl flex flex-col items-center justify-center text-center space-y-3 bg-slate-900/40">
                   <span className="text-4xl animate-bounce">📷</span>
                   <div className="space-y-1">
-                    <p className="text-sm font-bold text-white">Live In-Field Camera Capture</p>
+                    <p className="text-sm font-bold text-white">Botanical Photo Capture & Verification</p>
                     <p className="text-xs text-slate-400">
-                      Anti-fraud policy: Only direct camera captures are accepted. Screenshots & gallery uploads are strictly rejected.
+                      Capture directly using live camera or upload a herb photo from your local files/gallery.
                     </p>
                   </div>
-                  <Button type="button" onClick={startLiveCamera} className="text-xs py-2.5 px-6 font-bold flex items-center gap-2">
-                    <span>🎥</span>
-                    <span>Open Live Camera</span>
-                  </Button>
+                  <div className="flex flex-wrap justify-center gap-3 pt-1">
+                    <Button type="button" onClick={startLiveCamera} className="text-xs py-2.5 px-5 font-bold flex items-center gap-2">
+                      <span>🎥</span>
+                      <span>Open Live Camera</span>
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs py-2.5 px-5 font-bold rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 flex items-center gap-2 transition shadow-sm"
+                    >
+                      <span>📁</span>
+                      <span>Upload Local File</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

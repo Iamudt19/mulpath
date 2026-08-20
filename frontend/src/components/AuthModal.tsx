@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
+const getApiBase = () => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) return envUrl;
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:3001';
+  }
+  return 'https://mulpath.onrender.com';
+};
+
+const API_BASE = getApiBase();
 
 export type UserRole = 'COLLECTOR' | 'AGGREGATOR' | 'LAB' | 'MANUFACTURER' | 'ADMIN';
 
@@ -56,11 +65,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess
 }) => {
+  const [loginMethod, setLoginMethod] = useState<'PASSWORD' | 'OTP'>('PASSWORD');
   const [authMode, setAuthMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole === 'ADMIN' ? 'COLLECTOR' : initialRole);
   const [step, setStep] = useState<'INPUT' | 'OTP'>('INPUT');
+  
   const [email, setEmail] = useState(roleDescriptions[initialRole].defaultEmail);
   const [userName, setUserName] = useState(roleDescriptions[initialRole].sampleName);
+  const [password, setPassword] = useState('Password123!');
+  const [confirmPassword, setConfirmPassword] = useState('Password123!');
+  const [showPassword, setShowPassword] = useState(false);
+  
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -91,6 +106,92 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg('');
   };
 
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+
+    if (!password || password.length < 4) {
+      setErrorMsg('Password must be at least 4 characters long.');
+      return;
+    }
+
+    if (authMode === 'SIGNUP' && password !== confirmPassword) {
+      setErrorMsg('Passwords do not match. Please try again.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    const endpoint = authMode === 'SIGNUP' ? '/api/auth/register' : '/api/auth/login';
+
+    const payload = {
+      email: cleanEmail,
+      password,
+      name: authMode === 'SIGNUP' ? userName : undefined,
+      role: selectedRole
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8000)
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Authentication failed. Please check your credentials.');
+      }
+
+      const userObj = data.user || {
+        id: Math.floor(Math.random() * 10000),
+        name: authMode === 'SIGNUP' ? userName : (cleanEmail.split('@')[0]),
+        email: cleanEmail,
+        role: selectedRole,
+        walletAddress: `0x${Math.random().toString(16).slice(2, 42)}`,
+        walletBalance: 25000,
+        language: 'EN'
+      };
+
+      const tokenStr = data.token || `mock_jwt_token_${Date.now()}`;
+
+      localStorage.setItem('mulpath_token', tokenStr);
+      localStorage.setItem('mulpath_user', JSON.stringify(userObj));
+      window.dispatchEvent(new Event('auth-change'));
+      onSuccess(userObj);
+    } catch (err: any) {
+      // Fallback for local demo if backend is offline/unreachable
+      console.warn('[AUTH FALLBACK]', err.message);
+      if (err.name === 'AbortError' || err.message.includes('fetch') || err.message.includes('Failed to fetch') || err.message.includes('connecting')) {
+        const mockUser = {
+          id: 101,
+          name: userName || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          role: selectedRole,
+          walletAddress: `0x${Math.random().toString(16).slice(2, 42)}`,
+          walletBalance: 25000,
+          language: 'EN'
+        };
+        localStorage.setItem('mulpath_token', `demo_token_${Date.now()}`);
+        localStorage.setItem('mulpath_user', JSON.stringify(mockUser));
+        window.dispatchEvent(new Event('auth-change'));
+        onSuccess(mockUser);
+        return;
+      }
+      setErrorMsg(err.message || 'Error authenticating with server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -107,7 +208,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail }),
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(8000)
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -201,11 +302,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg rounded-3xl bg-slate-950/95 border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100">
+      <div className="relative w-full max-w-lg rounded-3xl bg-slate-950/95 border border-slate-800 p-6 sm:p-8 shadow-2xl space-y-6 text-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 transition"
+          className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 transition z-10"
         >
           ✕
         </button>
@@ -216,36 +317,59 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {roleDescriptions[selectedRole].icon}
           </div>
           <h3 className="text-xl font-black text-white tracking-tight">
-            Stakeholder Gateway & Email Authentication
+            Stakeholder Gateway
           </h3>
           <p className="text-xs text-slate-400">
-            Secure multi-stakeholder access for Ayurvedic botanical supply chain.
+            Secure authentication for Ayurvedic botanical supply chain network.
           </p>
 
-          {/* Sign In vs Sign Up Tab Switcher */}
+          {/* Authentication Method Selector (Password vs OTP) */}
+          <div className="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800/80 max-w-xs mx-auto mt-3">
+            <button
+              type="button"
+              onClick={() => { setLoginMethod('PASSWORD'); setStep('INPUT'); setErrorMsg(''); }}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                loginMethod === 'PASSWORD'
+                  ? 'bg-emerald-500 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              🔒 Password
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginMethod('OTP'); setStep('INPUT'); setErrorMsg(''); }}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
+                loginMethod === 'OTP'
+                  ? 'bg-emerald-500 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              ✉️ Email OTP
+            </button>
+          </div>
+
+          {/* Sign In vs Sign Up Mode Switcher */}
           {step === 'INPUT' && (
-            <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 max-w-xs mx-auto mt-3">
+            <div className="flex justify-center gap-4 text-xs font-medium text-slate-400 pt-1">
               <button
                 type="button"
-                onClick={() => setAuthMode('LOGIN')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
-                  authMode === 'LOGIN'
-                    ? 'bg-emerald-500 text-white shadow'
-                    : 'text-slate-400 hover:text-slate-200'
+                onClick={() => { setAuthMode('LOGIN'); setErrorMsg(''); }}
+                className={`transition pb-0.5 border-b-2 ${
+                  authMode === 'LOGIN' ? 'border-emerald-400 text-emerald-400 font-bold' : 'border-transparent hover:text-slate-200'
                 }`}
               >
-                🔑 Sign In
+                Sign In
               </button>
+              <span>•</span>
               <button
                 type="button"
-                onClick={() => setAuthMode('SIGNUP')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${
-                  authMode === 'SIGNUP'
-                    ? 'bg-emerald-500 text-white shadow'
-                    : 'text-slate-400 hover:text-slate-200'
+                onClick={() => { setAuthMode('SIGNUP'); setErrorMsg(''); }}
+                className={`transition pb-0.5 border-b-2 ${
+                  authMode === 'SIGNUP' ? 'border-emerald-400 text-emerald-400 font-bold' : 'border-transparent hover:text-slate-200'
                 }`}
               >
-                ✨ Sign Up / Register
+                Create Account (Sign Up)
               </button>
             </div>
           )}
@@ -289,8 +413,105 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        {/* Form Inputs */}
-        {step === 'INPUT' ? (
+        {/* Password Login Form */}
+        {loginMethod === 'PASSWORD' && step === 'INPUT' && (
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div className="space-y-3">
+              {authMode === 'SIGNUP' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Full Name / Organization
+                  </label>
+                  <input
+                    type="text"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="input-field text-sm"
+                    placeholder="e.g. Ramesh Patel"
+                    required
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-3 text-slate-400 text-sm">✉️</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input-field text-sm font-mono pl-9"
+                    placeholder="stakeholder@ayush.org"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-3 text-slate-400 text-sm">🔒</span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input-field text-sm font-mono pl-9 pr-10"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs p-1"
+                  >
+                    {showPassword ? '🙈 Hide' : '👁️ Show'}
+                  </button>
+                </div>
+              </div>
+
+              {authMode === 'SIGNUP' && (
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-3 text-slate-400 text-sm">🔑</span>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="input-field text-sm font-mono pl-9"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {errorMsg && (
+              <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-xs text-red-300 font-semibold">
+                ⚠️ {errorMsg}
+              </div>
+            )}
+
+            <Button type="submit" disabled={isLoading} className="w-full py-3 text-sm font-bold shadow-lg">
+              {isLoading
+                ? 'Authenticating...'
+                : authMode === 'SIGNUP'
+                ? `Register & Access ${roleDescriptions[selectedRole].title} ➔`
+                : `Sign In as ${roleDescriptions[selectedRole].title} ➔`}
+            </Button>
+          </form>
+        )}
+
+        {/* Email OTP Input Form */}
+        {loginMethod === 'OTP' && step === 'INPUT' && (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-3">
               {authMode === 'SIGNUP' && (
@@ -337,7 +558,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {isLoading ? 'Requesting Code...' : authMode === 'SIGNUP' ? 'Register & Send Code ➔' : 'Sign In with Email OTP ➔'}
             </Button>
           </form>
-        ) : (
+        )}
+
+        {/* OTP Code Verification Step */}
+        {loginMethod === 'OTP' && step === 'OTP' && (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div className="text-center space-y-1">
               <p className="text-xs text-slate-400">

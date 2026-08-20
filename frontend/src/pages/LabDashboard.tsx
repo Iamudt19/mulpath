@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BlockchainTxModal } from '../components/BlockchainTxModal';
+import { downloadQACertificate, generateCertId, generateSha256 } from '../utils/generateCertificate';
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'https://mulpath.onrender.com';
+import { API_BASE } from '../config';
 
 interface LabSample {
   id: number;
@@ -176,6 +177,55 @@ export const LabDashboard: React.FC = () => {
       {!selectedSample && !isCompleted && (
         /* Screen L2 — Pending Samples Queue */
         <div className="space-y-4">
+          {/* 📄 Quick Certificate Demo Banner */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-teal-950/60 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-2xl flex-shrink-0">
+                📄
+              </div>
+              <div>
+                <h4 className="font-bold text-white text-sm">QA/QC PDF Certificate Generator</h4>
+                <p className="text-xs text-slate-400 mt-0.5">Generate an official, print-ready certificate with SHA-256 hash, digital QR seal, and blockchain proof for any sample.</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">🔐 SHA-256 Hash</span>
+                  <span className="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-full font-bold">⛓ Blockchain Anchored</span>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">🔲 Digital QR Seal</span>
+                  <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold">🏛 NABL Accredited</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const demo = samples[0] || {
+                  lotId: 'LOT-ASHWA-2291', herbName: 'Ashwagandha (Withania somnifera)',
+                  aggregatorName: 'Mandi Hub Nimbahera', sampleVialId: 'VIAL-MUL-8492'
+                };
+                const certId = generateCertId(demo.lotId);
+                const sha256 = generateSha256(certId + demo.lotId + purityScore + activeCompounds);
+                downloadQACertificate({
+                  certId, sha256Hash: sha256,
+                  lotId: demo.lotId, herbName: demo.herbName,
+                  species: demo.herbName,
+                  testDate: new Date().toISOString().split('T')[0],
+                  validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  labName: 'NABL-Accredited Quality Testing Lab #18',
+                  labAccreditation: 'NABL-1869 | ISO/IEC 17025:2017',
+                  technician: 'Dr. Sunita Sharma',
+                  signingKey: '0x9f18...c021',
+                  purityScore, activeCompounds, moistureContent, heavyMetals,
+                  testResult: 'PASSED',
+                  aggregatorName: demo.aggregatorName,
+                  sampleVialId: demo.sampleVialId,
+                  blockchainTxHash: `0x${Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')}`
+                });
+              }}
+              className="flex-shrink-0 py-3 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-900/40 transition-all active:scale-95 whitespace-nowrap"
+            >
+              <span>📄</span>
+              <span>Download Sample Certificate</span>
+            </button>
+          </div>
+
           <div className="flex justify-between items-center">
             <div>
               <h3 className="font-bold text-white text-base">Samples Awaiting Chemical Analysis</h3>
@@ -208,12 +258,38 @@ export const LabDashboard: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3">
-                      <Button
-                        onClick={() => setSelectedSample(s)}
-                        className="py-1.5 px-3 text-xs"
-                      >
-                        Enter Results ➔
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => setSelectedSample(s)}
+                          className="py-1.5 px-3 text-xs"
+                        >
+                          Enter Results ➔
+                        </Button>
+                        <button
+                          title="Download QA Certificate"
+                          onClick={() => {
+                            const certId = generateCertId(s.lotId);
+                            const sha256 = generateSha256(certId + s.lotId + purityScore + activeCompounds);
+                            downloadQACertificate({
+                              certId, sha256Hash: sha256,
+                              lotId: s.lotId, herbName: s.herbName, species: s.herbName,
+                              testDate: new Date().toISOString().split('T')[0],
+                              validUntil: new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0],
+                              labName: 'NABL-Accredited Quality Testing Lab #18',
+                              labAccreditation: 'NABL-1869 | ISO/IEC 17025:2017',
+                              technician: 'Dr. Sunita Sharma',
+                              signingKey: '0x9f18...c021',
+                              purityScore, activeCompounds, moistureContent, heavyMetals,
+                              testResult: 'PASSED',
+                              aggregatorName: s.aggregatorName,
+                              sampleVialId: s.sampleVialId
+                            });
+                          }}
+                          className="py-1.5 px-2.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 text-xs font-bold transition flex items-center gap-1"
+                        >
+                          📄 PDF
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -455,6 +531,41 @@ export const LabDashboard: React.FC = () => {
               {certHash}
             </p>
           </div>
+
+          {/* Download QA/QC PDF Certificate Button */}
+          <button
+            onClick={() => {
+              if (!selectedSample) return;
+              const certId = generateCertId(selectedSample.lotId);
+              const sha256 = generateSha256(certId + selectedSample.lotId + purityScore + activeCompounds);
+              downloadQACertificate({
+                certId,
+                sha256Hash: sha256,
+                lotId: selectedSample.lotId,
+                herbName: selectedSample.herbName,
+                species: selectedSample.herbName,
+                testDate: new Date().toISOString().split('T')[0],
+                validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                labName: 'NABL-Accredited Quality Testing Lab #18',
+                labAccreditation: 'NABL-1869 | ISO/IEC 17025:2017',
+                technician: 'Dr. Sunita Sharma',
+                signingKey: '0x9f18...c021',
+                purityScore,
+                activeCompounds,
+                moistureContent,
+                heavyMetals,
+                testResult,
+                aggregatorName: selectedSample.aggregatorName,
+                sampleVialId: selectedSample.sampleVialId,
+                blockchainTxHash: certHash || undefined
+              });
+            }}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-900/40 transition-all active:scale-[0.98]"
+          >
+            <span className="text-lg">📄</span>
+            <span>Download Official QA/QC PDF Certificate</span>
+            <span className="text-xs opacity-70 ml-1 font-normal">(SHA-256 · QR Seal · Blockchain Proof)</span>
+          </button>
 
           <div className="flex gap-3">
             <Button onClick={() => { setIsCompleted(false); setSelectedSample(null); }} className="w-full py-2.5">

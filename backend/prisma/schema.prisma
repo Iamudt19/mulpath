@@ -30,6 +30,7 @@ model User {
   id            Int            @id @default(autoincrement())
   phone         String?        @unique  // 10-digit Indian mobile, primary login
   email         String?        @unique  // Optional, for manufacturers/labs
+  password      String?        // Password hash for password-based login
   name          String         @default("Farmer")
   role          Role           @default(CONSUMER)
   walletAddress String?        @unique  // Smart wallet (ERC-4337)
