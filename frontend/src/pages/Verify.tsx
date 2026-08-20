@@ -66,6 +66,11 @@ export const VerifyPage: React.FC = () => {
             const fairPct = f.fairTradePercentage || 15.0;
             const price = f.finalPriceInr || 499;
 
+            const procEvent = primaryBatch?.processingEvents?.[0];
+            const procTxHash = procEvent?.txHash || primaryBatch?.blockchainRecords?.find((r: any) => r.entityType === 'ProcessingEvent')?.txHash || batchTxHash || f.txHash;
+            const labTxHash = cert?.txHash || primaryBatch?.blockchainRecords?.find((r: any) => r.entityType === 'TestCertificate')?.txHash || batchTxHash || f.txHash;
+            const mfgTxHash = f.txHash || f.invoiceHash || batchTxHash;
+
             setProductData({
               id: (f.id || id).toString(),
               name: f.name || 'Mūlpath Certified Formulation',
@@ -73,7 +78,7 @@ export const VerifyPage: React.FC = () => {
               retailPriceInr: price,
               farmerSharePct: fairPct,
               farmerPayoutInr: Math.round((price * fairPct) / 100),
-              blockchainTxHash: f.txHash || f.invoiceHash || batchTxHash || '0x3a7b9c1d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b',
+              blockchainTxHash: mfgTxHash || batchTxHash || '0x3a7b9c1d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b',
               purityScore: cert ? parseFloat(cert.notes?.match(/([\d.]+)%/)?.[1] || '0') || 98.4 : 98.4,
               scanCount: f.scanCount || 1,
               latitude: primaryBatch?.latitude || 24.465,
@@ -106,7 +111,7 @@ export const VerifyPage: React.FC = () => {
                     primaryBatch?.aiConfidence != null ? `AI Match: ${primaryBatch.aiConfidence}%` : 'AI Match: 95%'
                   ].filter(Boolean).join(' · '),
                   date: primaryBatch?.harvestDate ? new Date(primaryBatch.harvestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '17 Aug 2026',
-                  txHash: batchTxHash || '0x3a7b9c1d2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a6b'
+                  txHash: batchTxHash || mfgTxHash
                 },
                 {
                   stage: 'PROCESSING',
@@ -114,7 +119,7 @@ export const VerifyPage: React.FC = () => {
                   title: 'Temperature-Controlled Drying & Milling',
                   subtitle: 'Processed at Mandi Depot Hub · Dried at 42°C for 18h · NFC Seal Verified Intact',
                   date: f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '17 Aug 2026',
-                  txHash: '0x8f2b37e190284c8e71fa84902194849102c91823746192837461928374619283'
+                  txHash: procTxHash
                 },
                 {
                   stage: 'LAB_TEST',
@@ -122,7 +127,7 @@ export const VerifyPage: React.FC = () => {
                   title: cert ? `NABL Chemical Assay: ${cert.result}` : 'NABL Chemical Assay: PASSED',
                   subtitle: cert?.notes || 'HPLC Purity: 98.6% · Withanolide A: 2.94% · Passed heavy metals test',
                   date: cert?.testDate ? new Date(cert.testDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '17 Aug 2026',
-                  txHash: cert?.certificateHash?.startsWith('0x') ? cert.certificateHash : '0x1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d'
+                  txHash: labTxHash
                 },
                 {
                   stage: 'MANUFACTURE',
@@ -130,7 +135,7 @@ export const VerifyPage: React.FC = () => {
                   title: 'Formulation Packaged & Serialized',
                   subtitle: `Formulation registered on-chain · Fair-Trade Farmer Share: ${fairPct}%`,
                   date: f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '17 Aug 2026',
-                  txHash: f.txHash || f.invoiceHash || '0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b'
+                  txHash: mfgTxHash
                 }
               ]
             });
