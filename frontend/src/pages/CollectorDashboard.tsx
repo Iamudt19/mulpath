@@ -18,6 +18,7 @@ L.Icon.Default.mergeOptions({
 import { API_BASE } from '../config';
 import { ImageComparisonSlider } from '../components/ImageComparisonSlider';
 import { GradCAMOverlay } from '../components/GradCAMOverlay';
+import { StepProgressStepper } from '../components/StepProgressStepper';
 
 type FarmerStep = 'F1_SPLASH' | 'F2_EMAIL' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
 
@@ -193,7 +194,8 @@ export const CollectorDashboard: React.FC = () => {
   const [heatmapBlobUrl, setHeatmapBlobUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [aiConfidence, setAiConfidence] = useState<number>(0);
-  const [aiSpeciesMatch, setAiSpeciesMatch] = useState('');
+  const [aiSpeciesMatch, setAiSpeciesMatch] = useState(''); // kept: used by backend API response display
+  void aiSpeciesMatch; // suppress TS6133 — displayed via species state in redesigned card
   const [aiStatus, setAiStatus] = useState<'APPROVED' | 'SPOT_CHECK' | 'REJECTED'>('REJECTED');
 
   // GPS State — starts empty, populated only by real device GPS
@@ -241,6 +243,9 @@ export const CollectorDashboard: React.FC = () => {
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [recentTransfers, setRecentTransfers] = useState<any[]>([]);
   const [autoSubmitToast, setAutoSubmitToast] = useState<string | null>(null);
+
+  // XAI section collapse
+  const [xaiOpen, setXaiOpen] = useState(true);
 
   // Modals & Popups
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
@@ -875,33 +880,74 @@ export const CollectorDashboard: React.FC = () => {
     } catch (e) { /* silent */ }
   };
 
+  // ── Session Countdown Ring (SVG) ──
+  const renderSessionCountdownRing = () => {
+    const TOTAL = 90;
+    const R = 44;
+    const CIRC = 2 * Math.PI * R;
+    const progress = Math.max(0, sessionSecondsLeft / TOTAL);
+    const dash = CIRC * progress;
+    const ringColor = sessionSecondsLeft < 5 ? '#ef4444' : sessionSecondsLeft < 20 ? '#fbbf24' : '#10b981';
+
+    return (
+      <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col items-center gap-3">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 self-start font-sans">Session Timer</p>
+
+        {/* SVG Ring */}
+        <div className={`relative ${sessionSecondsLeft < 20 ? 'countdown-urgent' : ''}`} style={{ color: ringColor }}>
+          <svg width="110" height="110" viewBox="0 0 110 110">
+            {/* Track */}
+            <circle cx="55" cy="55" r={R} fill="none" stroke="#1e293b" strokeWidth="6" />
+            {/* Progress arc */}
+            <circle
+              cx="55" cy="55" r={R}
+              fill="none"
+              stroke={ringColor}
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${CIRC}`}
+              transform="rotate(-90 55 55)"
+              style={{ transition: 'stroke-dasharray 1s linear, stroke 0.5s' }}
+            />
+          </svg>
+          {/* Centre text */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-mono font-black text-2xl leading-none" style={{ color: ringColor }}>
+              {sessionSecondsLeft}
+            </span>
+            <span className="text-[9px] text-slate-500 font-sans uppercase tracking-wider">seconds</span>
+          </div>
+        </div>
+
+        {/* Labels */}
+        <div className="text-center space-y-1">
+          <p className="text-xs font-bold text-white font-sans">Atomic Capture Session</p>
+          <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full">
+            Challenge #{challengeCode}
+          </span>
+          <p className="text-[11px] text-slate-500 font-sans">GPS · Photo · NFC</p>
+        </div>
+      </div>
+    );
+  };
+
+  // (kept for mobile compact bar)
   const renderSessionBanner = () => {
     const isHarvestFlow = ['F5_GPS', 'F6_CAMERA', 'F7_NFC', 'F8_REVIEW'].includes(currentStep);
     if (!isHarvestFlow) return null;
-
+    const ringColor = sessionSecondsLeft < 5 ? '#ef4444' : sessionSecondsLeft < 20 ? '#fbbf24' : '#10b981';
     return (
-      <div className="bg-slate-900/90 border border-emerald-500/30 rounded-xl p-2.5 flex items-center justify-between shadow-sm">
+      <div className={`block md:hidden rounded-xl p-2.5 flex items-center justify-between border ${
+        sessionSecondsLeft < 20 ? 'bg-amber-950/30 border-amber-500/30' : 'bg-slate-900/80 border-slate-800'
+      }`}>
         <div className="flex items-center gap-2">
-          <span className="text-base animate-pulse">⏱️</span>
+          <span className="text-base">⏱️</span>
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Atomic Capture Session</span>
-              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold">
-                Challenge #{challengeCode}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-300">
-              Auto-submits on 0s • GPS + Photo + NFC
-            </p>
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-sans">Atomic Session</span>
+            <span className="ml-2 text-[9px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold">#{challengeCode}</span>
           </div>
         </div>
-        <div className={`px-2.5 py-1 rounded-lg font-mono text-xs font-black ${
-          sessionSecondsLeft < 20
-            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
-            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-        }`}>
-          {sessionSecondsLeft}s left
-        </div>
+        <span className="font-mono text-xs font-black" style={{ color: ringColor }}>{sessionSecondsLeft}s</span>
       </div>
     );
   };
@@ -910,8 +956,14 @@ export const CollectorDashboard: React.FC = () => {
   // RENDER SCREENS (F1 to F10)
   // ══════════════════════════════════════════════════════════════════
 
+  const isHarvestFlow = ['F5_GPS', 'F6_CAMERA', 'F7_NFC', 'F8_REVIEW'].includes(currentStep);
+
   return (
-    <div className="max-w-md mx-auto space-y-4 pb-24 text-slate-100 animate-fade-in-up relative">
+    <div className={`text-slate-100 animate-fade-in-up relative ${
+      isHarvestFlow
+        ? 'harvest-layout'
+        : 'max-w-md mx-auto space-y-4 pb-24'
+    }`}>
       {/* ── Auto-Submit Toast Notification ── */}
       {autoSubmitToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-slate-950 px-4 py-2.5 rounded-xl font-bold text-xs shadow-2xl flex items-center gap-2 animate-fade-in-up border border-emerald-400">
@@ -937,6 +989,44 @@ export const CollectorDashboard: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* ── LEFT PANEL (harvest steps only, desktop) ── */}
+      {isHarvestFlow && (
+        <div className="harvest-left-panel hidden md:flex">
+          {renderSessionCountdownRing()}
+          <StepProgressStepper
+            currentStep={currentStep}
+            onNavigate={(step) => setCurrentStep(step)}
+          />
+          {/* GPS status chip */}
+          {latVal && lngVal && (
+            <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 font-sans ${
+              isInsideZone
+                ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                : 'bg-slate-900/80 border-slate-700 text-slate-400'
+            }`}>
+              <span className="text-base">{isInsideZone ? '✅' : '📍'}</span>
+              <div>
+                <strong className="block font-bold">{isInsideZone ? 'Zone Verified' : 'GPS Acquired'}</strong>
+                <span className="font-mono text-[10px] opacity-70">{parseFloat(latVal).toFixed(4)}, {parseFloat(lngVal).toFixed(4)}</span>
+              </div>
+            </div>
+          )}
+          {/* Species chip */}
+          {species && currentStep !== 'F5_GPS' && (
+            <div className="p-3 rounded-xl border border-slate-700 bg-slate-900/80 text-xs flex items-center gap-2 font-sans">
+              <span className="text-base">🌿</span>
+              <div>
+                <strong className="block font-bold text-white">{species}</strong>
+                <span className="text-slate-500">Selected species</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── RIGHT PANEL / single-column content ── */}
+      <div className={isHarvestFlow ? 'space-y-4' : 'space-y-4'}>
 
       {/* Screen F1 — Splash / Language Select */}
       {currentStep === 'F1_SPLASH' && (
@@ -1482,130 +1572,158 @@ export const CollectorDashboard: React.FC = () => {
 
       {/* Screen F6 — Species Photo Capture & Edge AI */}
       {currentStep === 'F6_CAMERA' && (
-        <Card className="p-5 space-y-4">
+        <Card className="p-5 space-y-5">
+          {/* Mobile-only session banner */}
           {renderSessionBanner()}
 
-          <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          {/* Step header */}
+          <div className="flex justify-between items-center">
             <div>
-              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Step 2 of 4</span>
-              <h3 className="text-lg font-bold text-white">Botanical Verification</h3>
+              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest font-sans">📸 Step 2 of 4</span>
+              <h3 className="text-xl font-bold text-white mt-0.5">Botanical Verification</h3>
             </div>
-            <button onClick={() => setCurrentStep('F5_GPS')} className="text-xs text-slate-400 hover:text-white">
-              Back
+            <button
+              onClick={() => setCurrentStep('F5_GPS')}
+              className="text-xs text-slate-500 hover:text-white bg-slate-800/60 hover:bg-slate-700/60 px-3 py-1.5 rounded-lg border border-slate-700 font-sans transition"
+            >
+              ← Back
             </button>
           </div>
 
-          <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl space-y-1">
-            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">🌿 AI Auto-Detection Mode</span>
-            <p className="text-xs text-slate-300">
-              Point camera at herb leaves or roots. Our fine-tuned Vision Transformer & Botanical AI will automatically detect and identify the species.
-            </p>
+          {/* AI mode banner */}
+          <div className="p-3.5 bg-gradient-to-r from-emerald-950/60 to-teal-950/40 border border-emerald-500/30 rounded-xl flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-sm flex-shrink-0 mt-0.5">🌿</div>
+            <div>
+              <span className="text-xs font-bold text-emerald-300 font-sans">AI Auto-Detection Mode Active</span>
+              <p className="text-[11px] text-slate-400 mt-0.5 font-sans leading-relaxed">
+                Point camera at herb leaves or roots. Fine-tuned Vision Transformer &amp; Botanical AI automatically detects and identifies the species.
+              </p>
+            </div>
           </div>
 
-          {/* Camera Viewfinder (Live Camera Capture Required) */}
+          {/* ── CAMERA / UPLOAD AREA ── */}
           {isCameraActive ? (
-            <div className="space-y-3 flex flex-col items-center">
-              <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black border border-emerald-500/50 shadow-lg">
+            /* ── LIVE CAMERA VIEWFINDER ── */
+            <div className="space-y-4">
+              <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black camera-glow">
                 <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                {/* Viewfinder crosshairs & live badge */}
-                <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-red-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
-                  <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
-                  <span>LIVE CAMERA STREAM</span>
+                {/* Scanline overlay */}
+                <div className="absolute inset-0 camera-scanline" />
+                {/* Corner reticles */}
+                <div className="reticle-corner reticle-tl" />
+                <div className="reticle-corner reticle-tr" />
+                <div className="reticle-corner reticle-bl" />
+                <div className="reticle-corner reticle-br" />
+                {/* LIVE badge */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600/90 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg font-sans">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                  <span>LIVE</span>
                 </div>
-                <div className="absolute inset-4 border-2 border-dashed border-emerald-400/60 rounded-lg pointer-events-none flex items-center justify-center">
-                  <span className="text-xs text-white/90 bg-black/60 backdrop-blur px-3 py-1 rounded-full font-medium">
-                    Center 2–3 {species} leaves in box
+                {/* Analyzing badge */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-emerald-600/80 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1 rounded-full font-sans">
+                  <span className="animate-spin text-xs">⚙️</span>
+                  <span>AI ANALYZING…</span>
+                </div>
+                {/* Centre guide */}
+                <div className="absolute inset-8 border border-dashed border-emerald-400/40 rounded-xl pointer-events-none flex items-end justify-center pb-3">
+                  <span className="text-[11px] text-white/80 bg-black/50 backdrop-blur px-3 py-1 rounded-full font-sans">
+                    Center {species} leaves in frame
                   </span>
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={stopCameraStream}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm text-slate-300 font-semibold border border-slate-700 font-sans transition"
+                >
+                  Cancel
+                </button>
                 <button
                   type="button"
                   onClick={captureCameraFrame}
-                  className="w-14 h-14 rounded-full bg-white border-4 border-emerald-500 shadow-xl flex items-center justify-center text-xl active:scale-95 transition hover:scale-105"
+                  className="w-16 h-16 rounded-full bg-white border-4 border-emerald-500 shadow-2xl flex items-center justify-center text-2xl active:scale-90 hover:scale-105 transition-all"
                   title="Capture Frame"
                 >
                   📸
                 </button>
                 <button
                   type="button"
-                  onClick={stopCameraStream}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs text-slate-300 font-semibold"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm text-slate-300 font-semibold border border-slate-700 font-sans transition"
                 >
-                  Cancel
+                  📁 Upload
                 </button>
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* Hidden File Input for Local Photo Upload */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+            <div className="space-y-4">
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
 
               {photoBlobUrl ? (
+                /* ── CAPTURED: comparison slider ── */
                 <div className="space-y-3">
-                  {heatmapBlobUrl ? (
-                    <ImageComparisonSlider
-                      originalImage={photoBlobUrl}
-                      heatmapImage={heatmapBlobUrl}
-                    />
-                  ) : (
-                    <div className="relative rounded-xl overflow-hidden border border-slate-700 aspect-video bg-black flex items-center justify-center shadow-md">
-                      <img src={photoBlobUrl} alt="Captured herb" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-
-                  <div className="flex justify-end gap-2">
+                  <div className="rounded-2xl overflow-hidden border border-slate-700 shadow-xl">
+                    {heatmapBlobUrl ? (
+                      <ImageComparisonSlider originalImage={photoBlobUrl} heatmapImage={heatmapBlobUrl} />
+                    ) : (
+                      <div className="relative aspect-video bg-black">
+                        <img src={photoBlobUrl} alt="Captured herb" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="bg-black/60 backdrop-blur px-4 py-2 rounded-full flex items-center gap-2 text-xs text-white font-sans">
+                            <span className="animate-spin">⚙️</span> Processing AI heatmap…
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setPhotoBlobUrl(null);
-                        setHeatmapBlobUrl(null);
-                        setPhotoFile(null);
-                        startLiveCamera();
-                      }}
-                      className="bg-slate-900 hover:bg-black p-2 px-3 rounded-xl text-xs text-white flex items-center gap-1.5 font-semibold border border-slate-700 shadow-md transition"
+                      onClick={() => { setPhotoBlobUrl(null); setHeatmapBlobUrl(null); setPhotoFile(null); startLiveCamera(); }}
+                      className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 font-semibold font-sans flex items-center justify-center gap-1.5 transition"
                     >
-                      <span>🎥</span>
-                      <span>Retake Live</span>
+                      🎥 Retake Live
                     </button>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="bg-emerald-600/90 hover:bg-emerald-600 p-2 px-3 rounded-xl text-xs text-white flex items-center gap-1.5 font-semibold shadow-md transition"
+                      className="flex-1 py-2.5 rounded-xl bg-emerald-700/60 hover:bg-emerald-700/80 border border-emerald-600/40 text-xs text-white font-semibold font-sans flex items-center justify-center gap-1.5 transition"
                     >
-                      <span>📁</span>
-                      <span>Upload Local File</span>
+                      📁 Upload Different
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="p-6 border-2 border-dashed border-emerald-500/30 rounded-xl flex flex-col items-center justify-center text-center space-y-3 bg-slate-900/40">
-                  <span className="text-4xl animate-bounce">📷</span>
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-white">Botanical Photo Capture & Verification</p>
-                    <p className="text-xs text-slate-400">
-                      Capture directly using live camera or upload a herb photo from your local files/gallery.
+                /* ── EMPTY DROP-ZONE ── */
+                <div
+                  className="group cursor-pointer p-8 border-2 border-dashed border-emerald-500/25 hover:border-emerald-500/50 rounded-2xl flex flex-col items-center justify-center text-center space-y-4 bg-gradient-to-b from-slate-900/60 to-slate-950/60 hover:from-emerald-950/20 transition-all duration-300"
+                  onClick={startLiveCamera}
+                >
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 group-hover:bg-emerald-500/20 border border-emerald-500/20 group-hover:border-emerald-500/40 flex items-center justify-center text-3xl transition-all animate-float">
+                    📷
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-white font-sans">Capture Botanical Photo</p>
+                    <p className="text-xs text-slate-500 mt-1 font-sans">
+                      Tap to open camera, or upload from your gallery
                     </p>
                   </div>
-                  <div className="flex flex-wrap justify-center gap-3 pt-1">
-                    <Button type="button" onClick={startLiveCamera} className="text-xs py-2.5 px-5 font-bold flex items-center gap-2">
-                      <span>🎥</span>
-                      <span>Open Live Camera</span>
-                    </Button>
+                  <div className="flex flex-wrap justify-center gap-3 w-full">
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-xs py-2.5 px-5 font-bold rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 flex items-center gap-2 transition shadow-sm"
+                      onClick={(e) => { e.stopPropagation(); startLiveCamera(); }}
+                      className="flex-1 min-w-[120px] py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold font-sans flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-900/30"
                     >
-                      <span>📁</span>
-                      <span>Upload Local File</span>
+                      🎥 Open Camera
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                      className="flex-1 min-w-[120px] py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-bold font-sans flex items-center justify-center gap-2 transition"
+                    >
+                      📁 Upload File
                     </button>
                   </div>
                 </div>
@@ -1613,40 +1731,77 @@ export const CollectorDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* AI Result Card */}
-          <div className={`p-3.5 rounded-xl border space-y-2 transition ${
-            aiStatus === 'APPROVED' ? 'bg-emerald-950/30 border-emerald-500/40' :
-            aiStatus === 'SPOT_CHECK' ? 'bg-amber-950/30 border-amber-500/40' : 'bg-red-950/30 border-red-500/40'
+          {/* ── AI RESULT CARD (premium) ── */}
+          <div className={`rounded-2xl overflow-hidden transition-all duration-500 ${
+            aiStatus === 'APPROVED' ? 'card-glow-emerald' :
+            aiStatus === 'SPOT_CHECK' ? 'card-glow-amber' : 'card-glow-red'
           }`}>
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
-                <span>🤖</span>
-                <span>Edge AI Botanical Vision</span>
-              </span>
-              <span className={`text-xs font-black font-mono px-2 py-0.5 rounded ${
-                aiStatus === 'APPROVED' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                aiStatus === 'SPOT_CHECK' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-red-500/20 text-red-300 border border-red-500/40'
+            {/* Header */}
+            <div className={`px-4 py-3 flex items-center justify-between ${
+              aiStatus === 'APPROVED' ? 'bg-emerald-950/70' :
+              aiStatus === 'SPOT_CHECK' ? 'bg-amber-950/70' : 'bg-red-950/70'
+            }`}>
+              <div className="flex items-center gap-2">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm ${
+                  aiStatus === 'APPROVED' ? 'bg-emerald-500/20 border border-emerald-500/30' :
+                  aiStatus === 'SPOT_CHECK' ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-red-500/20 border border-red-500/30'
+                }`}>
+                  🤖
+                </div>
+                <span className="text-xs font-bold text-slate-300 font-sans">Edge AI Botanical Vision</span>
+              </div>
+              <span className={`text-xs font-black font-mono px-2.5 py-1 rounded-full ${
+                aiStatus === 'APPROVED' ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40' :
+                aiStatus === 'SPOT_CHECK' ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40' : 'bg-red-500/25 text-red-300 border border-red-500/40'
               }`}>
-                {aiConfidence}% Confidence
+                {aiConfidence}%
               </span>
             </div>
-            <p className="text-sm font-bold text-white">🌿 {aiSpeciesMatch}</p>
 
-            {aiStatus === 'APPROVED' && (
-              <p className="text-[11px] text-emerald-400 font-semibold">
-                ✅ High confidence botanical match. Morphological traits match {species}.
+            {/* Body */}
+            <div className="p-4 bg-slate-900/80 space-y-3">
+              {/* Species name */}
+              <div>
+                <p className="text-lg font-bold text-white font-sans leading-tight">
+                  {aiStatus === 'APPROVED' ? '✅' : aiStatus === 'SPOT_CHECK' ? '⚠️' : '❌'}&nbsp;
+                  {species}
+                </p>
+                <p className="text-xs text-slate-500 italic font-sans mt-0.5">
+                  {species === 'Ashwagandha' ? 'Withania somnifera' :
+                   species === 'Tulsi' ? 'Ocimum tenuiflorum' :
+                   species === 'Neem' ? 'Azadirachta indica' :
+                   species === 'Brahmi' ? 'Bacopa monnieri' : 'Botanical specimen'}
+                </p>
+              </div>
+
+              {/* Animated confidence bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-sans">
+                  <span className="text-slate-500">Confidence Score</span>
+                  <span className="font-mono font-bold text-slate-300">{aiConfidence}%</span>
+                </div>
+                <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full conf-bar-fill ${
+                      aiStatus === 'APPROVED' ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' :
+                      aiStatus === 'SPOT_CHECK' ? 'bg-gradient-to-r from-amber-600 to-amber-400' :
+                      'bg-gradient-to-r from-red-700 to-red-500'
+                    }`}
+                    style={{ '--conf-width': `${aiConfidence}%` } as React.CSSProperties}
+                  />
+                </div>
+              </div>
+
+              {/* Status message */}
+              <p className={`text-[11px] font-sans leading-relaxed ${
+                aiStatus === 'APPROVED' ? 'text-emerald-400' :
+                aiStatus === 'SPOT_CHECK' ? 'text-amber-300' : 'text-red-400'
+              }`}>
+                {aiStatus === 'APPROVED' && 'High confidence botanical match — morphological traits verified against PhytoNet database.'}
+                {aiStatus === 'SPOT_CHECK' && `Moderate confidence (${aiConfidence}%). Flagged for visual inspection at the Mandi depot.`}
+                {aiStatus === 'REJECTED' && `Verification rejected (${aiConfidence}%). Species mismatch or non-botanical image detected.`}
               </p>
-            )}
-            {aiStatus === 'SPOT_CHECK' && (
-              <p className="text-[11px] text-amber-300 font-semibold">
-                ⚠️ Moderate confidence ({aiConfidence}%). Flagged for mandatory visual inspection at the Mandi depot.
-              </p>
-            )}
-            {aiStatus === 'REJECTED' && (
-              <p className="text-[11px] text-red-400 font-bold">
-                ❌ Verification Rejected ({aiConfidence}%). Species mismatch or non-botanical image detected.
-              </p>
-            )}
+            </div>
           </div>
 
           {/* 💡 AI Suggestions to Improve Match (Shown when confidence is low or rejected) */}
@@ -1673,15 +1828,34 @@ export const CollectorDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* 🔥 Grad-CAM XAI — Explainable AI Heatmap */}
+          {/* ── XAI SECTION: Grad-CAM Explainable AI ── */}
           {photoBlobUrl && aiStatus !== 'REJECTED' && (
-            <div className="animate-fade-in-up">
-              <GradCAMOverlay
-                imageSrc={photoBlobUrl}
-                species={species}
-                confidence={aiConfidence}
-                onHeatmapGenerated={(url) => setHeatmapBlobUrl(url)}
-              />
+            <div className="rounded-2xl overflow-hidden border border-red-500/20 animate-fade-in-up">
+              {/* Collapsible header */}
+              <button
+                onClick={() => setXaiOpen(o => !o)}
+                className="w-full px-4 py-3 bg-gradient-to-r from-red-950/70 to-orange-950/50 flex items-center justify-between hover:from-red-950/90 transition-all"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-red-500/20 border border-red-500/30 flex items-center justify-center text-sm">
+                    🔥
+                  </div>
+                  <div className="text-left">
+                    <span className="text-sm font-bold text-white font-sans">Explainable AI Insights</span>
+                    <span className="ml-2 text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded-full font-sans uppercase">XAI</span>
+                  </div>
+                </div>
+                <span className={`text-slate-400 text-sm transition-transform duration-300 ${xaiOpen ? 'rotate-180' : ''}`}>▾</span>
+              </button>
+              {/* Collapsible body */}
+              <div className={`xai-section-body ${xaiOpen ? 'xai-open' : 'xai-closed'}`}>
+                <GradCAMOverlay
+                  imageSrc={photoBlobUrl}
+                  species={species}
+                  confidence={aiConfidence}
+                  onHeatmapGenerated={(url) => setHeatmapBlobUrl(url)}
+                />
+              </div>
             </div>
           )}
 
@@ -2203,6 +2377,7 @@ export const CollectorDashboard: React.FC = () => {
         durationMs={5000}
         onClose={handleBlockchainModalDone}
       />
+      </div>{/* end right panel */}
     </div>
   );
 };
