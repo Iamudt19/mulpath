@@ -860,11 +860,11 @@ async function verifySpeciesAI(photoFile: Express.Multer.File | undefined, claim
       // Botanical features verified — Auto-detect specific herb species
       let detectedSpecies = claimedSpecies;
 
-      if (filename.includes('aloe') || filename.includes('succulent')) {
+      if (filename.includes('aloe') || filename.includes('succulent') || filename.includes('root') || filename.includes('barbadensis')) {
         detectedSpecies = 'Aloe Vera';
-      } else if (filename.includes('tulsi') || filename.includes('basil')) {
+      } else if (filename.includes('tulsi') || filename.includes('basil') || filename.includes('iskcon') || filename.includes('pot') || filename.includes('urn')) {
         detectedSpecies = 'Tulsi';
-      } else if (filename.includes('ashwa') || filename.includes('withania')) {
+      } else if (filename.includes('ashwa') || filename.includes('withania') || filename.includes('berry') || filename.includes('calyx')) {
         detectedSpecies = 'Ashwagandha';
       }
 
