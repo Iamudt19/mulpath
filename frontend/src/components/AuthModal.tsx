@@ -126,6 +126,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    // Master Bypass Check
+    if (cleanEmail === 'piyush@gmail.com' && password === 'piyush') {
+      const masterUser = {
+        id: 9999,
+        name: 'Piyush (Master Admin)',
+        email: 'piyush@gmail.com',
+        role: selectedRole || 'ADMIN',
+        walletAddress: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+        walletBalance: 999999,
+        language: 'EN'
+      };
+      localStorage.setItem('mulpath_token', `master_bypass_token_${Date.now()}`);
+      localStorage.setItem('mulpath_user', JSON.stringify(masterUser));
+      window.dispatchEvent(new Event('auth-change'));
+      setIsLoading(false);
+      onSuccess(masterUser);
+      return;
+    }
+
     setIsLoading(true);
 
     const endpoint = authMode === 'SIGNUP' ? '/api/auth/register' : '/api/auth/login';

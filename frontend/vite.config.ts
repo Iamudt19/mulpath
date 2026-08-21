@@ -120,6 +120,7 @@ export default defineConfig({
     })
   ],
   server: {
+    host: true,   // ← expose to local network (phone access)
     port: 5173,
     proxy: {
       '/api': {
