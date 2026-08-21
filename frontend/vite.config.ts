@@ -107,6 +107,8 @@ export default defineConfig({
             }
           }
         ],
+        // Allow bundle caching up to 5MB (for TF.js + PDF libs)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // Pre-cache all build assets
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Skip Workbox logging in production
