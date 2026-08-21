@@ -925,7 +925,17 @@ export const CollectorDashboard: React.FC = () => {
         const data = await res.json();
         if (data.transfers && data.transfers.length > 0) {
           const latest = data.transfers[0];
-          if (!paymentNotice) {
+          const transferId = String(latest.id || latest.txHash || 'latest');
+          
+          let seen: string[] = [];
+          try {
+            seen = JSON.parse(localStorage.getItem('mulpath_seen_payment_ids') || '[]');
+          } catch (e) {}
+
+          if (!seen.includes(transferId)) {
+            seen.push(transferId);
+            localStorage.setItem('mulpath_seen_payment_ids', JSON.stringify(seen));
+            
             setPaymentNotice({
               show: true,
               amount: latest.amount,
@@ -2203,7 +2213,7 @@ export const CollectorDashboard: React.FC = () => {
               </div>
             </div>
 
-            <Button onClick={() => setPaymentNotice(null)} className="w-full py-2.5">
+            <Button onClick={() => { setPaymentNotice(null); setCurrentStep('F10_WALLET'); }} className="w-full py-2.5">
               View in Wallet ➔
             </Button>
           </div>
