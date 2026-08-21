@@ -141,8 +141,8 @@ export default function MainLayout() {
             <p style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, marginBottom: '4px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
               {t('nav.network', 'Network')}
             </p>
-            <p style={{ fontSize: '13px', color: '#f8fafc', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255,255,255,0.6)', flexShrink: 0 }}></span>
+            <p style={{ fontSize: '13px', color: '#f8fafc', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981, 0 0 14px rgba(16, 185, 129, 0.6)', flexShrink: 0, display: 'inline-block' }}></span>
               {t('nav.sepolia', 'Sepolia Testnet')}
             </p>
           </div>
