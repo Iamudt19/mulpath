@@ -73,14 +73,39 @@ export const Home = () => {
           </p>
         </div>
 
-        {/* Div 3: Call to Actions */}
-        <div className="glass-card max-w-md mx-auto p-4 flex justify-center gap-4 animate-fade-in-up">
-          <Button onClick={() => navigate('/verify')} className="px-5 py-2.5 font-bold text-xs">✨ Verify a Product</Button>
-          <Button variant="secondary" onClick={() => {
-            const el = document.getElementById('portals');
-            el?.scrollIntoView({ behavior: 'smooth' });
-          }} className="px-5 py-2.5 font-semibold text-xs">Explore Portals</Button>
+        {/* Div 3: Primary CTA — Get Started as Collector */}
+        <div className="flex flex-col items-center gap-4 animate-fade-in-up">
+          {/* Main hero CTA */}
+          <button
+            onClick={() => navigate('/collector')}
+            className="group relative flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-base text-white overflow-hidden shadow-2xl shadow-emerald-900/40 transition-all duration-300 hover:scale-105 active:scale-95"
+            style={{
+              background: 'linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)',
+            }}
+          >
+            {/* Shimmer */}
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+            <span className="text-xl">👨🏽‍🌾</span>
+            <span>Get Started — Collector Field Portal</span>
+            <span className="text-lg opacity-80 group-hover:translate-x-1 transition-transform">→</span>
+          </button>
+
+          {/* Caption */}
+          <p className="text-[11px] text-slate-500 font-sans flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+            Field harvest logging · GPS verification · AI species detection · Blockchain recording
+          </p>
+
+          {/* Secondary actions */}
+          <div className="glass-card max-w-md w-full p-3 flex justify-center gap-3">
+            <Button onClick={() => navigate('/verify')} className="px-5 py-2.5 font-bold text-xs">✨ Verify a Product</Button>
+            <Button variant="secondary" onClick={() => {
+              const el = document.getElementById('portals');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }} className="px-5 py-2.5 font-semibold text-xs">Explore All Portals</Button>
+          </div>
         </div>
+
       </div>
 
       {/* Trust Stats Ticker Grid */}
