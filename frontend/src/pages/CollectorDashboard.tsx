@@ -628,9 +628,9 @@ export const CollectorDashboard: React.FC = () => {
         const rootRatio = samples > 0 ? earthRootCount / samples : 0;
         const skinRatio = samples > 0 ? skinToneCount / samples : 0;
 
-        const isDarkOrBlank = avgLum < 28;
-        const isHumanFaceOrRoom = skinRatio > 0.18;
-        const isFoliageDetected = chlorophyllRatio > 0.08 || rootRatio > 0.10;
+        const isFoliageDetected = chlorophyllRatio > 0.03 || rootRatio > 0.04;
+        const isDarkOrBlank = avgLum < 15 && !isFoliageDetected;
+        const isHumanFaceOrRoom = skinRatio > 0.50 && !isFoliageDetected;
 
         canvas.toBlob(blob => {
           if (blob) {
@@ -680,8 +680,8 @@ export const CollectorDashboard: React.FC = () => {
       return;
     }
 
-    // 2. Human Face / Selfie / Room Filter
-    if (isHumanFace) {
+    // 2. Human Face / Selfie Filter (Only when NO foliage is present)
+    if (isHumanFace && !isFoliage) {
       setAiConfidence(14);
       setAiSpeciesMatch('❌ Human face / non-botanical object detected. Point camera at live leaves/roots.');
       setAiStatus('REJECTED');
