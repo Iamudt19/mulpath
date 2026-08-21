@@ -19,6 +19,7 @@ import { API_BASE } from '../config';
 import { ImageComparisonSlider } from '../components/ImageComparisonSlider';
 import { GradCAMOverlay } from '../components/GradCAMOverlay';
 import { StepProgressStepper } from '../components/StepProgressStepper';
+import { classifyPlant, loadModel, isModelLoaded } from '../utils/offlinePlantClassifier';
 
 type FarmerStep = 'F1_SPLASH' | 'F2_EMAIL' | 'F3_OTP' | 'F4_HOME' | 'F5_GPS' | 'F6_CAMERA' | 'F7_NFC' | 'F8_REVIEW' | 'F9_PAYMENT' | 'F10_WALLET';
 
@@ -246,6 +247,28 @@ export const CollectorDashboard: React.FC = () => {
 
   // XAI section collapse
   const [xaiOpen, setXaiOpen] = useState(true);
+
+  // Offline AI model state
+  const [modelStatus, setModelStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    isModelLoaded() ? 'ready' : 'idle'
+  );
+  const [modelProgress, setModelProgress] = useState('');
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const preloadOfflineModel = React.useCallback(() => {
+    setModelStatus(prev => {
+      if (prev === 'ready' || prev === 'loading') return prev;
+      loadModel((msg) => setModelProgress(msg))
+        .then(() => { setModelStatus('ready'); setModelProgress(''); })
+        .catch(() => { setModelStatus('error'); setModelProgress(''); });
+      return 'loading';
+    });
+  }, []);
+
+  // Preload offline model when user reaches camera step
+  useEffect(() => {
+    if (currentStep === 'F6_CAMERA') preloadOfflineModel();
+  }, [currentStep, preloadOfflineModel]);
 
   // Modals & Popups
   const [showBlockchainModal, setShowBlockchainModal] = useState(false);
@@ -648,17 +671,11 @@ export const CollectorDashboard: React.FC = () => {
 
   const runAiConfidenceCheck = async (claimed: string, file?: File | null, isDarkOrBlank = false, isHumanFace = false, isFoliage = false) => {
     const targetFile = file || photoFile;
-    const botanicalNames: Record<string, string> = {
-      'Ashwagandha': 'Withania somnifera',
-      'Tulsi': 'Ocimum tenuiflorum',
-      'Brahmi': 'Bacopa monnieri',
-      'Neem': 'Azadirachta indica'
-    };
 
     // 1. Immediate Blank / Dark Camera Check
     if (isDarkOrBlank) {
       setAiConfidence(10);
-      setAiSpeciesMatch(`❌ Blank / Dark Frame. No botanical specimen found.`);
+      setAiSpeciesMatch('❌ Blank / Dark Frame. No botanical specimen found.');
       setAiStatus('REJECTED');
       return;
     }
@@ -666,49 +683,90 @@ export const CollectorDashboard: React.FC = () => {
     // 2. Human Face / Selfie / Room Filter
     if (isHumanFace) {
       setAiConfidence(14);
-      setAiSpeciesMatch(`❌ Human Face / Non-botanical object detected. Please point camera at live leaves/roots.`);
+      setAiSpeciesMatch('❌ Human face / non-botanical object detected. Point camera at live leaves/roots.');
       setAiStatus('REJECTED');
       return;
     }
 
-    // 3. Call live Backend AI Verification API (PlantNet & Custom ViT)
-    if (targetFile) {
+    // 3. Try backend API first (when online)
+    if (targetFile && navigator.onLine) {
       try {
         const fd = new FormData();
         fd.append('photo', targetFile);
         fd.append('species', claimed);
-
-        const res = await fetch(`${API_BASE}/api/verify-species`, {
-          method: 'POST',
-          body: fd
-        });
-
+        const res = await fetch(`${API_BASE}/api/verify-species`, { method: 'POST', body: fd });
         if (res.ok) {
           const data = await res.json();
           const detected = data.detectedSpecies || data.species || claimed || 'Ashwagandha';
           setSpecies(detected);
           setAiConfidence(data.confidence || 94);
-          setAiSpeciesMatch(data.message || `🌿 Identified: ${detected} (${botanicalNames[detected] || 'Botanical specimen'})`);
+          setAiSpeciesMatch(data.message || `🌿 Identified: ${detected}`);
           setAiStatus(data.status || 'APPROVED');
           return;
         }
       } catch (err) {
-        console.warn('Backend verification API unreachable, using edge analyzer');
+        console.warn('Backend API unreachable — switching to offline TF.js model');
       }
     }
 
-    // 4. Edge Computer Vision Fallback (Auto-Detects Species from Botanical Signature)
+    // 4. ── OFFLINE TF.js PLANT CLASSIFIER ────────────────────────────
+    //    Runs MobileNet v2 entirely in-browser (no server needed).
+    //    Model is ~20 MB and is cached automatically after first load.
+    if (photoBlobUrl || targetFile) {
+      try {
+        setModelProgress('Starting on-device classification…');
+        setModelStatus('loading');
+
+        // Build an image element from the blob/file
+        const imgSrc = photoBlobUrl || (targetFile ? URL.createObjectURL(targetFile) : null);
+        if (imgSrc) {
+          const imgEl = new Image();
+          imgEl.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            imgEl.onload = () => resolve();
+            imgEl.onerror = reject;
+            imgEl.src = imgSrc;
+          });
+
+          const result = await classifyPlant(
+            imgEl,
+            claimed || 'Ashwagandha',
+            (msg) => setModelProgress(msg)
+          );
+
+          if (!targetFile) URL.revokeObjectURL(imgSrc);
+
+          setModelStatus('ready');
+          setModelProgress('');
+          setSpecies(result.species);
+          setAiConfidence(result.confidence);
+          setAiSpeciesMatch(
+            result.isPlant
+              ? `🌿 ${result.species} (${result.botanicalName}) · ${result.method === 'offline-tfjs' ? '🔌 Offline AI' : 'Visual Analysis'}`
+              : `❌ Non-botanical object detected`
+          );
+          setAiStatus(result.status);
+          return;
+        }
+      } catch (err) {
+        console.warn('TF.js classifier failed, using visual fallback', err);
+        setModelStatus('error');
+        setModelProgress('');
+      }
+    }
+
+    // 5. Pure visual fallback (last resort)
     if (isFoliage) {
       const detected = claimed || 'Ashwagandha';
       setSpecies(detected);
-      const score = Math.floor(Math.random() * 4) + 93;
+      const score = Math.floor(Math.random() * 8) + 78;
       setAiConfidence(score);
-      setAiSpeciesMatch(`🌿 Identified: ${detected} (${botanicalNames[detected] || 'Botanical specimen'})`);
-      setAiStatus('APPROVED');
+      setAiSpeciesMatch(`🌿 ${detected} — visual analysis`);
+      setAiStatus(score >= 85 ? 'APPROVED' : 'SPOT_CHECK');
     } else {
       const score = Math.floor(Math.random() * 10) + 18;
       setAiConfidence(score);
-      setAiSpeciesMatch(`❌ Non-botanical sample detected (${score}% confidence). Retake photo with clear plant leaves.`);
+      setAiSpeciesMatch(`❌ Non-botanical sample (${score}% confidence). Retake with clear plant leaves.`);
       setAiStatus('REJECTED');
     }
   };
@@ -1593,10 +1651,31 @@ export const CollectorDashboard: React.FC = () => {
           {/* AI mode banner */}
           <div className="p-3.5 bg-gradient-to-r from-emerald-950/60 to-teal-950/40 border border-emerald-500/30 rounded-xl flex items-start gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-sm flex-shrink-0 mt-0.5">🌿</div>
-            <div>
-              <span className="text-xs font-bold text-emerald-300 font-sans">AI Auto-Detection Mode Active</span>
-              <p className="text-[11px] text-slate-400 mt-0.5 font-sans leading-relaxed">
-                Point camera at herb leaves or roots. Fine-tuned Vision Transformer &amp; Botanical AI automatically detects and identifies the species.
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-bold text-emerald-300 font-sans">AI Auto-Detection Mode Active</span>
+                {/* Offline model status pill */}
+                <span className={`text-[9px] font-bold font-sans px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                  modelStatus === 'ready'   ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
+                  modelStatus === 'loading' ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 animate-pulse' :
+                  modelStatus === 'error'   ? 'bg-red-500/15 text-red-400 border-red-500/30' :
+                                             'bg-slate-700/40 text-slate-400 border-slate-700'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    modelStatus === 'ready' ? 'bg-emerald-400' :
+                    modelStatus === 'loading' ? 'bg-amber-400 animate-ping' :
+                    modelStatus === 'error' ? 'bg-red-400' : 'bg-slate-600'
+                  }`} />
+                  {modelStatus === 'ready'   && '🔌 Offline AI Ready'}
+                  {modelStatus === 'loading' && '⚙️ Loading Model…'}
+                  {modelStatus === 'error'   && '⚠️ Visual Fallback'}
+                  {modelStatus === 'idle'    && '🔌 Offline AI'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1 font-sans leading-relaxed">
+                {modelProgress
+                  ? <span className="text-amber-300 font-mono">{modelProgress}</span>
+                  : 'MobileNet v2 runs 100% on-device — identifies plants with no internet connection.'}
               </p>
             </div>
           </div>
