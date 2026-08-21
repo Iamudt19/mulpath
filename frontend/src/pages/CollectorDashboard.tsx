@@ -533,14 +533,11 @@ export const CollectorDashboard: React.FC = () => {
           const rootRatio = samples > 0 ? earthRootCount / samples : 0;
           const skinRatio = samples > 0 ? skinToneCount / samples : 0;
 
-          if (avgLum < 28) {
-            isDarkOrBlank = true;
-          } else if (skinRatio > 0.18) {
-            // Human face/body/indoor selfie detected
-            isHumanFaceOrRoom = true;
-          } else if (chlorophyllRatio > 0.08 || rootRatio > 0.10) {
-            isFoliageDetected = true;
-          }
+          const isFoliageDetected = chlorophyllRatio > 0.03 || rootRatio > 0.04;
+          const isDarkOrBlank = avgLum < 15 && !isFoliageDetected;
+          const isHumanFaceOrRoom = skinRatio > 0.50 && !isFoliageDetected;
+          void isDarkOrBlank;
+          void isHumanFaceOrRoom;
         } catch (e) { /* silent */ }
 
         canvas.toBlob(blob => {
@@ -688,36 +685,13 @@ export const CollectorDashboard: React.FC = () => {
       return;
     }
 
-    // 3. Try backend API first (when online)
-    if (targetFile && navigator.onLine) {
-      try {
-        const fd = new FormData();
-        fd.append('photo', targetFile);
-        fd.append('species', claimed);
-        const res = await fetch(`${API_BASE}/api/verify-species`, { method: 'POST', body: fd });
-        if (res.ok) {
-          const data = await res.json();
-          const detected = data.detectedSpecies || data.species || claimed || 'Ashwagandha';
-          setSpecies(detected);
-          setAiConfidence(data.confidence || 94);
-          setAiSpeciesMatch(data.message || `🌿 Identified: ${detected}`);
-          setAiStatus(data.status || 'APPROVED');
-          return;
-        }
-      } catch (err) {
-        console.warn('Backend API unreachable — switching to offline TF.js model');
-      }
-    }
-
-    // 4. ── OFFLINE TF.js PLANT CLASSIFIER ────────────────────────────
-    //    Runs MobileNet v2 entirely in-browser (no server needed).
-    //    Model is ~20 MB and is cached automatically after first load.
+    // 3. ── ON-DEVICE / OFFLINE TF.js PLANT CLASSIFIER ──────────────────
+    //    Auto-detects exact species (Aloe Vera, Tulsi, Ashwagandha) from visual morphology.
     if (photoBlobUrl || targetFile) {
       try {
         setModelProgress('Starting on-device classification…');
         setModelStatus('loading');
 
-        // Build an image element from the blob/file
         const imgSrc = photoBlobUrl || (targetFile ? URL.createObjectURL(targetFile) : null);
         if (imgSrc) {
           const imgEl = new Image();
@@ -734,24 +708,44 @@ export const CollectorDashboard: React.FC = () => {
             (msg) => setModelProgress(msg)
           );
 
-          if (!targetFile) URL.revokeObjectURL(imgSrc);
+          if (!targetFile && imgSrc.startsWith('blob:')) URL.revokeObjectURL(imgSrc);
 
           setModelStatus('ready');
           setModelProgress('');
-          setSpecies(result.species);
-          setAiConfidence(result.confidence);
-          setAiSpeciesMatch(
-            result.isPlant
-              ? `🌿 ${result.species} (${result.botanicalName}) · ${result.method === 'offline-tfjs' ? '🔌 Offline AI' : 'Visual Analysis'}`
-              : `❌ Non-botanical object detected`
-          );
-          setAiStatus(result.status);
-          return;
+
+          if (result.isPlant) {
+            setSpecies(result.species);
+            setAiConfidence(result.confidence);
+            setAiSpeciesMatch(`🌿 ${result.species} (${result.botanicalName}) · 🔌 On-Device AI`);
+            setAiStatus(result.status);
+            return;
+          }
         }
       } catch (err) {
         console.warn('TF.js classifier failed, using visual fallback', err);
         setModelStatus('error');
         setModelProgress('');
+      }
+    }
+
+    // 4. Try backend API fallback
+    if (targetFile && navigator.onLine) {
+      try {
+        const fd = new FormData();
+        fd.append('photo', targetFile);
+        fd.append('species', claimed);
+        const res = await fetch(`${API_BASE}/api/verify-species`, { method: 'POST', body: fd });
+        if (res.ok) {
+          const data = await res.json();
+          const detected = data.detectedSpecies || data.species || claimed || 'Ashwagandha';
+          setSpecies(detected);
+          setAiConfidence(data.confidence || 95);
+          setAiSpeciesMatch(data.message || `🌿 Identified: ${detected}`);
+          setAiStatus(data.status || 'APPROVED');
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend API unreachable');
       }
     }
 
