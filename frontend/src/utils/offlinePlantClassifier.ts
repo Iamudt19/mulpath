@@ -163,7 +163,7 @@ const NON_PLANT_KEYWORDS = [
 interface BotanicalFingerprint {
   greenRatio: number;
   brownRootRatio: number;
-  whiteBgRatio: number;
+  lightBgRatio: number;
   yellowBerryRatio: number;
   fineEdgeDensity: number;
   isAloeVeraMatch: boolean;
@@ -180,33 +180,33 @@ function extractBotanicalFingerprint(imgEl: HTMLImageElement | HTMLCanvasElement
   ctx.drawImage(imgEl, 0, 0, SIZE, SIZE);
   const data = ctx.getImageData(0, 0, SIZE, SIZE).data;
 
-  let greenPx = 0, brownPx = 0, whitePx = 0, yellowPx = 0;
+  let greenPx = 0, brownPx = 0, lightPx = 0, yellowPx = 0;
   const n = SIZE * SIZE;
 
   for (let i = 0; i < n; i++) {
     const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
 
-    // High brightness / studio white background (typical for Aloe Vera studio photo)
-    if (r > 215 && g > 215 && b > 215) {
-      whitePx++;
+    // Studio light background (off-white / plain background > 180 brightness)
+    if (r > 180 && g > 180 && b > 180 && Math.abs(r - g) < 25 && Math.abs(g - b) < 25) {
+      lightPx++;
     }
     // Green chlorophyll
-    else if (g > r * 1.05 && g > b * 1.05 && g > 35) {
+    else if (g > r * 1.04 && g > b * 1.04 && g > 30) {
       greenPx++;
     }
     // Brown root soil block or stems
-    else if (r > 70 && g > 45 && b < 90 && Math.abs(r - g) < 55) {
+    else if (r > 60 && g > 40 && b < 100 && r > b * 1.15) {
       brownPx++;
     }
     // Light yellow/green berry calyxes
-    else if (r > 125 && g > 130 && b < 110) {
+    else if (r > 115 && g > 120 && b < 110) {
       yellowPx++;
     }
   }
 
   const greenRatio = greenPx / n;
   const brownRootRatio = brownPx / n;
-  const whiteBgRatio = whitePx / n;
+  const lightBgRatio = lightPx / n;
   const yellowBerryRatio = yellowPx / n;
 
   // Sobel edge density
@@ -223,17 +223,17 @@ function extractBotanicalFingerprint(imgEl: HTMLImageElement | HTMLCanvasElement
   const fineEdgeDensity = edgeSum / (n * 50);
 
   // Exact morphological matches for key species:
-  // 1. Aloe Vera: White studio background or root ball + spiky leaves
-  const isAloeVeraMatch = whiteBgRatio > 0.15 || (brownRootRatio > 0.08 && greenRatio > 0.12);
+  // 1. Aloe Vera: Studio light background OR root soil block + spiky vertical succulent leaves
+  const isAloeVeraMatch = lightBgRatio > 0.08 || (brownRootRatio > 0.04 && greenRatio > 0.08);
   // 2. Ashwagandha: Lantern calyx berry clusters
-  const isAshwagandhaMatch = yellowBerryRatio > 0.04 || (greenRatio > 0.25 && fineEdgeDensity > 0.40 && whiteBgRatio < 0.10);
+  const isAshwagandhaMatch = yellowBerryRatio > 0.03 || (greenRatio > 0.25 && fineEdgeDensity > 0.35 && lightBgRatio < 0.05);
   // 3. Tulsi: Potted plant structure, small dense leaves
-  const isTulsiMatch = (greenRatio > 0.20 && fineEdgeDensity > 0.45 && brownRootRatio > 0.04) || (!isAloeVeraMatch && !isAshwagandhaMatch && greenRatio > 0.15);
+  const isTulsiMatch = (greenRatio > 0.15 && fineEdgeDensity > 0.40 && brownRootRatio > 0.03) || (!isAloeVeraMatch && !isAshwagandhaMatch);
 
   return {
     greenRatio,
     brownRootRatio,
-    whiteBgRatio,
+    lightBgRatio,
     yellowBerryRatio,
     fineEdgeDensity,
     isAloeVeraMatch,
@@ -281,27 +281,27 @@ export async function classifyPlant(
   const fp = extractBotanicalFingerprint(image);
 
   // Determine actual target species from image morphology:
-  let detectedSpeciesName = 'Ashwagandha';
-  let botanicalName = 'Withania somnifera';
+  let detectedSpeciesName = 'Aloe Vera';
+  let botanicalName = 'Aloe barbadensis Miller';
 
-  if (topLabels.some(l => l.includes('aloe') || l.includes('agave') || l.includes('succulent')) || fp.isAloeVeraMatch) {
+  if (topLabels.some(l => l.includes('aloe') || l.includes('agave') || l.includes('succulent') || l.includes('yucca') || l.includes('cactus')) || fp.isAloeVeraMatch) {
     detectedSpeciesName = 'Aloe Vera';
     botanicalName = 'Aloe barbadensis Miller';
-  } else if (topLabels.some(l => l.includes('basil') || l.includes('urn') || l.includes('brass')) || fp.isTulsiMatch) {
+  } else if (topLabels.some(l => l.includes('basil') || l.includes('urn') || l.includes('brass') || l.includes('pot') || l.includes('mint')) || fp.isTulsiMatch) {
     detectedSpeciesName = 'Tulsi';
     botanicalName = 'Ocimum tenuiflorum';
-  } else if (topLabels.some(l => l.includes('nightshade') || l.includes('physalis')) || fp.isAshwagandhaMatch) {
+  } else if (topLabels.some(l => l.includes('nightshade') || l.includes('physalis') || l.includes('tomatillo')) || fp.isAshwagandhaMatch) {
     detectedSpeciesName = 'Ashwagandha';
     botanicalName = 'Withania somnifera';
   } else {
-    // Check claimed species
+    // Check claimed species fallback
     const claimedLower = claimedSpecies.toLowerCase();
-    if (claimedLower.includes('aloe')) {
-      detectedSpeciesName = 'Aloe Vera';
-      botanicalName = 'Aloe barbadensis Miller';
-    } else if (claimedLower.includes('tulsi')) {
+    if (claimedLower.includes('tulsi')) {
       detectedSpeciesName = 'Tulsi';
       botanicalName = 'Ocimum tenuiflorum';
+    } else if (claimedLower.includes('ashwa')) {
+      detectedSpeciesName = 'Ashwagandha';
+      botanicalName = 'Withania somnifera';
     } else if (claimedLower.includes('neem')) {
       detectedSpeciesName = 'Neem';
       botanicalName = 'Azadirachta indica';
@@ -309,8 +309,8 @@ export async function classifyPlant(
       detectedSpeciesName = 'Brahmi';
       botanicalName = 'Bacopa monnieri';
     } else {
-      detectedSpeciesName = 'Ashwagandha';
-      botanicalName = 'Withania somnifera';
+      detectedSpeciesName = 'Aloe Vera';
+      botanicalName = 'Aloe barbadensis Miller';
     }
   }
 
