@@ -1854,6 +1854,7 @@ export const CollectorDashboard: React.FC = () => {
                 <p className="text-xs text-slate-500 italic font-sans mt-0.5">
                   {species === 'Ashwagandha' ? 'Withania somnifera' :
                    species === 'Tulsi' ? 'Ocimum tenuiflorum' :
+                   species === 'Aloe Vera' ? 'Aloe barbadensis Miller' :
                    species === 'Neem' ? 'Azadirachta indica' :
                    species === 'Brahmi' ? 'Bacopa monnieri' : 'Botanical specimen'}
                 </p>
