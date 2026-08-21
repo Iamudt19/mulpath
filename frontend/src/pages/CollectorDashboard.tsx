@@ -695,10 +695,12 @@ export const CollectorDashboard: React.FC = () => {
         const imgSrc = photoBlobUrl || (targetFile ? URL.createObjectURL(targetFile) : null);
         if (imgSrc) {
           const imgEl = new Image();
-          imgEl.crossOrigin = 'anonymous';
+          if (imgSrc.startsWith('http://') || imgSrc.startsWith('https://')) {
+            imgEl.crossOrigin = 'anonymous';
+          }
           await new Promise<void>((resolve, reject) => {
             imgEl.onload = () => resolve();
-            imgEl.onerror = reject;
+            imgEl.onerror = (e) => reject(e);
             imgEl.src = imgSrc;
           });
 
