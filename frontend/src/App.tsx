@@ -3,11 +3,16 @@ import { Analytics } from '@vercel/analytics/react';
 import MainLayout from './layouts/MainLayout';
 import { Home, Collector, Aggregator, Lab, Manufacturer, Verify, Admin } from './pages';
 import { LanguageProvider } from './context/LanguageContext';
+import { PWAInstallBanner, OfflineToast } from './components/PWAInstallBanner';
 
 function App() {
   return (
     <LanguageProvider>
       <BrowserRouter>
+        {/* Global PWA UI — works on all pages */}
+        <OfflineToast />
+        <PWAInstallBanner />
+
         <Routes>
           <Route path="/" element={<MainLayout />}>
             <Route index element={<Home />} />
